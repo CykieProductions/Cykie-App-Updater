@@ -28,7 +28,8 @@
 					   VerticalAlignment="Top"/>
 		</Grid>
 		
-		<Image Source="/Assets/background.png"
+		<Image x:Name="BackgroundImage"
+			   Source="/Assets/background.png"
 			   Stretch="UniformToFill"
 			   Opacity="0.8"
 			   Margin="0, 64, 0, 0"/>
@@ -37,11 +38,22 @@
 					Spacing="10"
 					HorizontalAlignment="Center"
 					Margin="10,100,10,10">
-
+			
 			<StackPanel.Background>
 				<SolidColorBrush Color="Black" Opacity="0" />
 			</StackPanel.Background>
-			
+
+			<StackPanel.Styles>
+				<Style Selector="Button:disabled /template/ ContentPresenter">
+					<Setter Property="TextBlock.Background">
+						<SolidColorBrush Color="DimGray" Opacity="0.8"/>
+					</Setter>
+				</Style>
+				<Style Selector="Button:pointerover /template/ ContentPresenter">
+					<Setter Property="TextBlock.Background" Value="CadetBlue"/>
+				</Style>
+			</StackPanel.Styles>
+
 			<Button x:Name="BtnUpdate"
 					Padding="18"
 					Foreground="White"
@@ -50,7 +62,14 @@
 					Width="500"
 					FontSize="18"
 					Content="{Binding StatusStr}"
-					Command="{Binding UpdateCommand}"/>
+					Command="{Binding UpdateCommand}">
+				<Button.Styles>
+					<Style Selector="Button:disabled /template/ ContentPresenter">
+						<Setter Property="TextBlock.Background" Value="MidnightBlue"/>
+						<Setter Property="TextBlock.Opacity" Value="1"/>
+					</Style>
+				</Button.Styles>
+			</Button>
 			
 			<Button x:Name="BtnLaunch"
 					Foreground="White"
@@ -65,7 +84,7 @@
 					   Padding="4"
 					   Foreground="White"
 					   HorizontalAlignment="Right"
-					   Text="0.0.0">
+					   Text="v-.-.-">
 				<TextBlock.Background>
 					<SolidColorBrush Color="Black" Opacity="0.3"/>
 				</TextBlock.Background>

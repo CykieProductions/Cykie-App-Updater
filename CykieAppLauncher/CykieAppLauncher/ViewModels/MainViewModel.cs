@@ -6,10 +6,13 @@ using System.Net.Http;
 using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
+using Avalonia.Media;
 using CykieAppLauncher.Models;
 using CykieAppLauncher.Views;
 using ReactiveUI;
+using static System.Net.Mime.MediaTypeNames;
 using Notification = Avalonia.Controls.Notifications.Notification;
 using Version = CykieAppLauncher.Models.Version;
 
@@ -24,23 +27,72 @@ namespace CykieAppLauncher.ViewModels
             {
                 _statusStr = value;
                 if (MainView.Current != null)
-                    MainView.Current.BtnUpdate.Content = _statusStr;
+                {
+                    Task task = new(() =>
+                    {
+                        MainView.Current.BtnUpdate.Content = _statusStr;
+                    });
+
+                    task.RunSynchronously(MainView.Current.SyncedScheduler);
+                }
             }
         }
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+        private static HttpClient httpClient;
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public enum LauncherState
         {
             Ready, Updating, Launching
         }
 
-        LauncherState launcherState;
-        //public Version LocalVersion { get; private set; }
+        LauncherState _launcherStatus = LauncherState.Ready;
+        public LauncherState LauncherStatus
+        {
+            get => _launcherStatus; private set
+            {
+                _launcherStatus = value;
+                if (MainView.Current != null)
+                {
+                    var view = MainView.Current;
+
+                    Task task = new(() =>
+                    {
+                        switch (_launcherStatus)
+                        {
+                            case LauncherState.Ready:
+                                view.BtnLaunch.IsEnabled = true;
+                                view.BtnUpdate.IsEnabled = true;
+                                break;
+                            case LauncherState.Updating:
+                                view.BtnLaunch.IsEnabled = false;
+                                view.BtnUpdate.IsEnabled = false;
+                                break;
+                            case LauncherState.Launching:
+                                view.BtnLaunch.IsEnabled = false;
+                                view.BtnUpdate.IsEnabled = false;
+                                break;
+                        }
+                    });
+
+                    task.RunSynchronously(view.SyncedScheduler);
+                }
+            }
+        }
+
         private Version _localVersion = Version.Default;
         public Version LocalVersion { get => _localVersion; private set
             {
                 _localVersion = value;
                 if (MainView.Current != null)
-                    MainView.Current.VersionTxt.Text = "v" + _localVersion.ToString();
+                {
+                    Task task = new(() =>
+                    {
+                        MainView.Current.VersionTxt.Text = "v" + _localVersion.ToString();
+                    });
+
+                    task.RunSynchronously(MainView.Current.SyncedScheduler);
+                }
             }
         }
         Version latestVersion = Version.Default;
@@ -59,6 +111,7 @@ namespace CykieAppLauncher.ViewModels
 
         public MainViewModel()
         {
+            httpClient = new HttpClient();
             InitConfig();
             Header = AppName;
 
@@ -68,10 +121,14 @@ namespace CykieAppLauncher.ViewModels
             if (AutoLaunch)
             {
                 if (MainView.Current != null)
-                    MainView.Current.BtnLaunch.IsEnabled = false;
+                    MainView.Current.IsEnabled = false;
 
                 OnLaunchClicked(true);
             }
+        }
+        ~MainViewModel()
+        {
+            httpClient.Dispose();
         }
         private void InitConfig()
         {
@@ -89,22 +146,6 @@ namespace CykieAppLauncher.ViewModels
 
                 var info = ParseConfigFile(out var config);
                 Config = config;
-
-                AppName = Config.Name;
-                //Set Auto Launch
-                if (bool.TryParse(info[^1].Split('=', 2)[1], out bool r))
-                    AutoLaunch = r;
-
-                //Where to download the Zip to
-                if (Config.ZipPath == "auto")
-                    ProgramZipDest = Path.Combine(RootPath, $"{AppName} v{Config.Version}.zip");
-                else 
-                    ProgramZipDest = Config.ZipPath;
-                //Where will the app launch from
-                if (Config.LaunchPath == "auto")
-                    LaunchFile = Path.Combine(RootPath, "Build", $"{AppName}.exe");
-                else
-                    LaunchFile = Config.LaunchPath;
             }
             catch (Exception ex)
             {
@@ -148,6 +189,22 @@ namespace CykieAppLauncher.ViewModels
                 info[3].Split('=', 2)[1].Trim(), info[4].Split('=', 2)[1].Trim());*/
             LocalVersion = new(config.Version);
 
+            AppName = config.Name;
+            //Set Auto Launch
+            if (bool.TryParse(info[^1].Split('=', 2)[1], out bool r))
+                AutoLaunch = r;
+
+            //Where to download the Zip to
+            if (config.ZipPath == "auto")
+                ProgramZipDest = Path.Combine(RootPath, $"{AppName} v{config.Version}.zip");
+            else
+                ProgramZipDest = config.ZipPath;
+            //Where will the app launch from
+            if (config.LaunchPath == "auto")
+                LaunchFile = Path.Combine(RootPath, $"Build - {AppName}", $"{AppName}.exe");
+            else
+                LaunchFile = config.LaunchPath;
+
             return info;
         }
 
@@ -155,21 +212,24 @@ namespace CykieAppLauncher.ViewModels
         async void PressedUpdate()
         {
             //Don't attempt another update before finishing
-            if (launcherState != LauncherState.Ready)
+            if (LauncherStatus != LauncherState.Ready)
                 return;
 
-            launcherState = LauncherState.Updating;
+            LauncherStatus = LauncherState.Updating;
             try
             {
-
-                if (!LocalVersion.IsValid() || await IsUpdateAvailable())
+                if (!LocalVersion.IsValid() || !File.Exists(LaunchFile) || await IsUpdateAvailable())
                 {
-                    InstallProgramFiles();
+                    InstallProgramFiles(false, latestVersion);
                 }
                 else
                 {
-                    launcherState = LauncherState.Ready;
+                    LauncherStatus = LauncherState.Ready;
                     StatusStr = "Up to Date";
+                    SetUpdateText("Check For Updates", 5f, () =>
+                    {
+                        return LauncherStatus != LauncherState.Ready;
+                    });
                 }
             }
             catch (Exception)
@@ -178,24 +238,24 @@ namespace CykieAppLauncher.ViewModels
                 throw;
             }
         }
+
         public ReactiveCommand<Unit, Unit> LaunchCommand { get; }
         void PressedLaunch()
         {
-            if (launcherState != LauncherState.Ready)
+            if (LauncherStatus != LauncherState.Ready)
                 return;
 
             OnLaunchClicked();
         }
-
         private async void OnLaunchClicked(bool forceUpdate = false)
         {
-            launcherState = LauncherState.Launching;
+            LauncherStatus = LauncherState.Launching;
 
             if (await IsUpdateAvailable())
             {
-                launcherState = LauncherState.Updating;
+                LauncherStatus = LauncherState.Updating;
                 if (forceUpdate)
-                    InstallProgramFiles(true);
+                    InstallProgramFiles(true, latestVersion);
                 else
                     AskToUpdate();
 
@@ -247,21 +307,43 @@ namespace CykieAppLauncher.ViewModels
         }
 
 
+        /// <summary>
+        /// Changes the update text with an optional delay
+        /// </summary>
+        /// <param name="text">Text to display</param>
+        /// <param name="secDelay">How many seconds to wait before changing the text</param>
+        /// <param name="cancelCondition">A condition that will be checked just before setting the text</param>
+        public async void SetUpdateText(string text, float secDelay, Func<bool>? cancelCondition = null)
+        {
+            if (secDelay > 0)
+            {
+                await Task.Run(() =>
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(secDelay));
+                });
+            }
+
+            bool shouldCancel = cancelCondition?.Invoke() ?? false;
+
+            if (shouldCancel)
+                return;
+            StatusStr = text;
+        }
+
 
         private async Task<bool> IsUpdateAvailable()
         {
             ParseConfigFile(out var config);
             Config = config;
 
-            HttpClient httpClient = new();
-            string onlineVersionStr = "";
+            Version onlineVersion = Version.Invalid;
 
             await Task.Run(async () =>
             {
-                onlineVersionStr = (await httpClient.GetStringAsync(Config.VersionLink)).Trim();
+                string onlineVersionStr = (await httpClient.GetStringAsync(Config.VersionLink)).Trim();
+                onlineVersion = new Version(onlineVersionStr);
             });
 
-            var onlineVersion = new Version(onlineVersionStr);
             latestVersion = LocalVersion;
 
             if (LocalVersion.Compare(onlineVersion) >= 0)
@@ -272,63 +354,59 @@ namespace CykieAppLauncher.ViewModels
         }
 
         //https://gist.github.com/yasirkula/d0ec0c07b138748e5feaecbd93b6223c
-        public async void InstallProgramFiles(bool launchAfter = false, Version? version = null)
+        public void InstallProgramFiles(bool launchAfter = false, Version? version = null)
         {
             StatusStr = "Updating...";
-            launcherState = LauncherState.Updating;
+            LauncherStatus = LauncherState.Updating;
 
-            try
+            _ = Task.Run(async () =>
             {
-                HttpClient httpClient = new();
-
-                if (version == null)
+                try
                 {
-                    await Task.Run(async () =>
-                    {
-                        version = new(
-                            (await httpClient.GetStringAsync(Config.VersionLink)).Trim());
-                    });
-                }
+                    version ??= new((await httpClient.GetStringAsync(Config.VersionLink)).Trim());
 
-                //! Ensures that the actual .zip is downloaded from Google Drive
-                int attempts = 0;
-                var link = new Uri(Config.BuildLink);
-                do
-                {
-                    var download = Task.Run(async () =>
+                    //! Ensures that the actual .zip is downloaded from Google Drive
+                    int attempts = 0;
+                    var link = new Uri(Config.BuildLink);
+                    do
                     {
-                        await httpClient.DownloadFileTaskAsync(link, ProgramZipDest);
-                    });
+                        var download = Task.Run(async () =>
+                        {
+                            await httpClient.DownloadFileTaskAsync(link, ProgramZipDest);
+                        });
 
-                    string dots = "...";
-                    while (!download.IsCompleted)
-                    {
-                        StatusStr = "Downloading Files" + dots;
-                        Thread.Sleep(1000);
-                        dots = dots == "..." ? "." : (dots == "." ? dots = ".." : "...");
+                        string dots = StatusStr.Split('.', 2)[1] + ".";
+                        //StatusStr = "Downloading Files" + dots;
+                        while (!download.IsCompleted)
+                        {
+                            Thread.Sleep(500);
+                            dots = dots == "..." ? "." : (dots == "." ? dots = ".." : "...");
+                            StatusStr = "Downloading Files" + dots;
+                        }
+
+                        ProcessDriveDownload(ProgramZipDest, out link);
+                        attempts++;
                     }
-
-                    ProcessDriveDownload(ProgramZipDest, out link);
-                    attempts++;
+                    while (!OnDownloadFileCompleted() && attempts < 4);
                 }
-                while (!OnDownloadFileCompleted() && attempts < 4);
+                catch (Exception ex)
+                {
+                    throw new Exception("Installation error: " + ex);
+                }
 
-                //x webClient.DownloadFileCompleted += OnDownloadFileCompleted;
-                //x webClient.DownloadFileAsync(new Uri(AppShell.Config.BuildLink), AppShell.ProgramZipDest, version);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-
-            if (launchAfter)
-                LaunchProgram();
+                if (launchAfter)
+                    LaunchProgram();
+            });
         }
 
-        // Downloading large files from Google Drive prompts a warning screen and requires manual confirmation
-        // Consider that case and try to confirm the download automatically if warning prompt occurs
-        // Returns true, if no more download requests are necessary
-        private bool ProcessDriveDownload(string fileName, out Uri newLink)
+        /// <summary>
+        /// Downloading large files from Google Drive prompts a warning screen and requires manual confirmation.
+        /// Consider that case and try to confirm the download automatically if warning prompt occurs
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="newLink"></param>
+        /// <returns>true, if no more download requests are necessary</returns>
+        private static bool ProcessDriveDownload(string fileName, out Uri newLink)
         {
             newLink = new(fileName);
             FileInfo downloadedFile = new FileInfo(fileName);
@@ -372,9 +450,11 @@ namespace CykieAppLauncher.ViewModels
         {
             try
             {
+                if (!HelperUtils.IsZipValid(ProgramZipDest))
+                    return false;
+
                 StatusStr = "Installing...";
-                ZipFile.ExtractToDirectory(ProgramZipDest,
-                    //.Replace(AppShell.Config.Version, onlineVersion), 
+                ZipFile.ExtractToDirectory(ProgramZipDest.Replace(Version.Invalid.ToString(), latestVersion.ToString()), 
                     Path.GetDirectoryName(LaunchFile), true);
                 File.Delete(ProgramZipDest);
             }
@@ -384,8 +464,13 @@ namespace CykieAppLauncher.ViewModels
             }
 
             UpdateVersionInfo(latestVersion.ToString());
-            launcherState = LauncherState.Ready;
+            LauncherStatus = LauncherState.Ready;
+
             StatusStr = "Up to Date";
+            SetUpdateText("Check For Updates", 10f, () =>
+            {
+                return LauncherStatus != LauncherState.Ready;
+            });
 
             return true;
         }

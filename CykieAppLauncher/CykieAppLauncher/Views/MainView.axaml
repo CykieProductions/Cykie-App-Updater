@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:CykieAppLauncher.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="CykieAppLauncher.Views.MainView"
+             x:DataType="vm:MainViewModel">
+  <Design.DataContext>
+    <!-- This only sets the DataContext for the previewer in an IDE,
+         to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
+    <vm:MainViewModel />
+  </Design.DataContext>
+
+	<Grid x:Name="ScreenGrid"
+		  Background="#442266">
+		<!--Title Bar-->
+		<Grid x:Name="TitleBarGrid"
+			VerticalAlignment="Top"
+			Height="64" Background="#333333">
+
+			<TextBlock x:Name="HeaderTxt"
+					   Foreground="White"
+					   Text="{Binding Header}"
+					   Padding="10"
+					   FontSize="30"
+					   HorizontalAlignment="Left"
+					   VerticalAlignment="Top"/>
+		</Grid>
+		
+		<Image Source="/Assets/background.png"
+			   Stretch="UniformToFill"
+			   Opacity="0.8"
+			   Margin="0, 64, 0, 0"/>
+
+		<StackPanel VerticalAlignment="Top"
+					Spacing="10"
+					HorizontalAlignment="Center"
+					Margin="10,100,10,10">
+
+			<StackPanel.Background>
+				<SolidColorBrush Color="Black" Opacity="0" />
+			</StackPanel.Background>
+			
+			<Button x:Name="BtnUpdate"
+					Padding="18"
+					Foreground="White"
+					Background="DarkOrange"
+					HorizontalContentAlignment="Center"
+					Width="500"
+					FontSize="18"
+					Content="{Binding StatusStr}"
+					Command="{Binding UpdateCommand}"/>
+			
+			<Button x:Name="BtnLaunch"
+					Foreground="White"
+					Background="ForestGreen"
+					HorizontalContentAlignment="Center"
+					Width="500"
+					Content="Launch"
+					Command="{Binding LaunchCommand}"/>
+
+			<TextBlock x:Name="VersionTxt"
+					   FontSize="15"
+					   Padding="4"
+					   Foreground="White"
+					   HorizontalAlignment="Right"
+					   Text="0.0.0">
+				<TextBlock.Background>
+					<SolidColorBrush Color="Black" Opacity="0.3"/>
+				</TextBlock.Background>
+			</TextBlock>
+			
+		</StackPanel>
+	</Grid>
+</UserControl>

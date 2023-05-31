@@ -1,0 +1,53 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33723.286
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher", "CykieAppLauncher\CykieAppLauncher.csproj", "{0462F635-79F5-4FED-A5BC-73F735F9FF0F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.Android", "CykieAppLauncher.Android\CykieAppLauncher.Android.csproj", "{1473E56B-DC22-4265-962E-B53428323E5A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.Desktop", "CykieAppLauncher.Desktop\CykieAppLauncher.Desktop.csproj", "{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.iOS", "CykieAppLauncher.iOS\CykieAppLauncher.iOS.csproj", "{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.Browser", "CykieAppLauncher.Browser\CykieAppLauncher.Browser.csproj", "{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0462F635-79F5-4FED-A5BC-73F735F9FF0F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0462F635-79F5-4FED-A5BC-73F735F9FF0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0462F635-79F5-4FED-A5BC-73F735F9FF0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0462F635-79F5-4FED-A5BC-73F735F9FF0F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1473E56B-DC22-4265-962E-B53428323E5A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1473E56B-DC22-4265-962E-B53428323E5A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1473E56B-DC22-4265-962E-B53428323E5A}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{1473E56B-DC22-4265-962E-B53428323E5A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1473E56B-DC22-4265-962E-B53428323E5A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1473E56B-DC22-4265-962E-B53428323E5A}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {61C44F3D-C809-4DCD-B261-C427985AD98F}
+	EndGlobalSection
+EndGlobal

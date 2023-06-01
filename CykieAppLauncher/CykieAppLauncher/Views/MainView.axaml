@@ -34,6 +34,63 @@
 			   Opacity="0.8"
 			   Margin="0, 64, 0, 0"/>
 
+		<!--Message Box-->
+		<Grid x:Name="MessageBox"
+			  VerticalAlignment="Center"
+			  HorizontalAlignment="Center"
+			  ZIndex="999"
+			  Background="White">
+			<StackPanel Background="DimGray"
+						Margin="3,3,3,3"
+						Width="360"
+						MaxHeight="420"
+						VerticalAlignment="Top">
+
+				<Grid Background="#333333" 
+					  Height="32">
+					<TextBlock x:Name="MBoxTitle"
+							   Margin="5,5,5,5"
+							   FontSize="16"
+							   Text="Heading"
+							   VerticalAlignment="Center"
+							   Foreground="White"/>
+				</Grid>
+
+				<TextBlock x:Name="MBoxMessage"
+						   Padding="10"
+						   FontSize="16"
+						   TextWrapping="Wrap"
+						   Text="Message Here"
+						   Foreground="White"/>
+				
+				<TextBox x:Name="MBoxTxtInput"
+						 FontSize="20"
+						 IsVisible="False"
+						 Padding="5"/>
+				
+				<StackPanel Margin="10,10,10,10"
+							Spacing="15"
+							HorizontalAlignment="Center"
+							Orientation="Horizontal"
+							x:Name="MBoxButtons">
+
+					
+
+					<StackPanel.Styles>
+						<Style Selector="Button">
+							<Setter Property="Margin" Value="10"/>
+							<Setter Property="FontSize" Value="24"/>
+							<Setter Property="Foreground" Value="White"/>
+							<Setter Property="HorizontalAlignment" Value="Center"/>
+							<Setter Property="VerticalAlignment" Value="Bottom"/>
+						</Style>
+					</StackPanel.Styles>
+
+				</StackPanel>
+			</StackPanel>
+		</Grid>
+		
+		<!--Main Button Stack-->
 		<StackPanel VerticalAlignment="Top"
 					Spacing="10"
 					HorizontalAlignment="Center"
@@ -52,6 +109,10 @@
 				<Style Selector="Button:pointerover /template/ ContentPresenter">
 					<Setter Property="TextBlock.Background" Value="CadetBlue"/>
 				</Style>
+				<Style Selector="Button /template/ ContentPresenter">
+					<Setter Property="HorizontalAlignment" Value="Center"/>
+					<Setter Property="HorizontalContentAlignment" Value="Center"/>
+				</Style>
 			</StackPanel.Styles>
 
 			<Button x:Name="BtnUpdate"
@@ -59,7 +120,8 @@
 					Foreground="White"
 					Background="DarkOrange"
 					HorizontalContentAlignment="Center"
-					Width="500"
+					MaxWidth="500"
+					MinWidth="360"
 					FontSize="18"
 					Content="{Binding StatusStr}"
 					Command="{Binding UpdateCommand}">
@@ -75,7 +137,8 @@
 					Foreground="White"
 					Background="ForestGreen"
 					HorizontalContentAlignment="Center"
-					Width="500"
+					MaxWidth="500"
+					MinWidth="360"
 					Content="Launch"
 					Command="{Binding LaunchCommand}"/>
 

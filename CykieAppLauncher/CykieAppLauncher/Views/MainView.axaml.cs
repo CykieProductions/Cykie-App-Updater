@@ -19,6 +19,9 @@ namespace CykieAppLauncher.Views
             Current = this;
             //synchronizationContext = SynchronizationContext.Current;
             SyncedScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+
+            Current.MessageBox.IsVisible = false;
+            Current.MessageBox.IsEnabled = false;
         }
     }
 }

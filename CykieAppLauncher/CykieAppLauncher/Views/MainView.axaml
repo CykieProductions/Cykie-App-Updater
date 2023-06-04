@@ -87,6 +87,7 @@
 					</StackPanel.Styles>
 
 				</StackPanel>
+				
 			</StackPanel>
 		</Grid>
 		
@@ -139,6 +140,7 @@
 					HorizontalContentAlignment="Center"
 					MaxWidth="500"
 					MinWidth="360"
+					FontSize="18"
 					Content="Launch"
 					Command="{Binding LaunchCommand}"/>
 

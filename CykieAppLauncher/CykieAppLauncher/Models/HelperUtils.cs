@@ -30,4 +30,17 @@ public static class HelperUtils
             return false;
         }
     }
+
+    //https://stackoverflow.com/questions/12553809/how-to-check-whether-file-exists-in-zip-file-using-dotnetzip
+    public static bool HasFile(this ZipArchive thisArchive, string fileNameOrExtension)
+    {
+        foreach (ZipArchiveEntry entry in thisArchive.Entries)
+        {
+            if (entry.FullName.EndsWith(fileNameOrExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 }

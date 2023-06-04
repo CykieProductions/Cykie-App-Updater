@@ -1,10 +1,12 @@
 ﻿using Android.App;
 using Android.Content;
 using Android.OS;
+using Java.IO;
 using Avalonia;
 using Avalonia.Android;
 using Avalonia.ReactiveUI;
 using Application = Android.App.Application;
+using CykieAppLauncher.ViewModels;
 
 namespace CykieAppLauncher.Android
 {
@@ -13,6 +15,7 @@ namespace CykieAppLauncher.Android
     {
         protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
         {
+            APKLauncher.Init();
             return base.CustomizeAppBuilder(builder)
                 .WithInterFont()
                 .UseReactiveUI();
@@ -21,6 +24,7 @@ namespace CykieAppLauncher.Android
         protected override void OnCreate(Bundle? savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
+            
         }
 
         protected override void OnResume()

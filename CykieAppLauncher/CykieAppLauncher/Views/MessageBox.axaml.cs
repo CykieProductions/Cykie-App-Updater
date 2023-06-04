@@ -30,6 +30,8 @@ public enum MessageBoxResult
     Decline,
     Cancel
 }
+
+//https://stackoverflow.com/questions/55706291/how-to-show-a-message-box-in-avaloniaui-beta
 partial class MessageBox : Window
 {
 
@@ -43,10 +45,7 @@ partial class MessageBox : Window
         var view = MainView.Current;
         if (view == null) return MessageBoxResult.Cancel;
 
-        view.MessageBox.IsVisible = true;
-        view.MessageBox.IsEnabled = true;
-
-        if (App.IsDesktop)
+        if (false)
         {
             var msgbox = new MessageBox()
             {
@@ -91,10 +90,12 @@ partial class MessageBox : Window
         }
         else
         {
+            var buttonPanel = view.MBoxButtons;//view.FindControl<StackPanel>("Buttons");
+            buttonPanel.Children.Clear();
+
             view.MessageBox.IsVisible = true;
             view.MessageBox.IsEnabled = true;
 
-            var buttonPanel = view.MBoxButtons;//view.FindControl<StackPanel>("Buttons");
             view.MBoxTitle.Text = title;
             view.MBoxMessage.Text = message;
 

@@ -3,7 +3,6 @@ using CykieAppLauncher.ViewModels;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace CykieAppLauncher.Views
 {

@@ -1,0 +1,7 @@
+App Name=Meeting Time
+Version=0.-4.0
+Zip Path=auto
+Launch Path=auto
+Version Link=https://drive.google.com/uc?export=download&id=1LW56nibL44OpIqPrDrwMlG3pY4QvcjgZ
+Build Link=https://drive.google.com/uc?export=download&id=14Y_iXKvY9tfoBdRZFiCj__vrt6pZHUZX
+Auto Launch=False

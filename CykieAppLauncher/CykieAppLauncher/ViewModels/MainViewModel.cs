@@ -6,13 +6,12 @@ using System.Net.Http;
 using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Notifications;
-using Avalonia.Media;
-using Avalonia.Styling;
 using CykieAppLauncher.Models;
 using CykieAppLauncher.Views;
-using ReactiveUI;
+using ReactiveUI; 
+
 using Version = CykieAppLauncher.Models.Version;
 
 namespace CykieAppLauncher.ViewModels
@@ -105,8 +104,14 @@ namespace CykieAppLauncher.ViewModels
         public static string ConfigFile { get; private set; } = "";
         public static string ProgramZipDest { get; private set; } = "";
         public static string LaunchFile { get; private set; } = "";
+        public static string BuildPath { get => Path.GetDirectoryName(LaunchFile); }
 
         public static ConfigurationInfo Config { get; private set; } = new(new string[6]);
+
+        public static event Action<string>? AndroidLaunchAction;
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+        public static event Func<string> RequestAndroidDataPath;
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 
         public MainViewModel()
         {
@@ -114,9 +119,11 @@ namespace CykieAppLauncher.ViewModels
             InitConfig();
             Header = AppName;
 
-            //todo REMOVE
-            /*if (File.Exists(ProgramZipDest))
+            if (File.Exists(ProgramZipDest))
                 File.Delete(ProgramZipDest);
+            //todo REMOVE
+            /*if (Directory.Exists(Path.GetDirectoryName(SettingsPath)))
+                Directory.Delete(Path.GetDirectoryName(SettingsPath), true);
             if (Directory.Exists(Path.GetDirectoryName(LaunchFile)))
                 Directory.Delete(Path.GetDirectoryName(LaunchFile), true);//*/
 
@@ -136,10 +143,12 @@ namespace CykieAppLauncher.ViewModels
         {
             try
             {
-                //RootPath = AppContext.BaseDirectory;
-                RootPath = Path.GetFullPath(AppContext.BaseDirectory);
-                var files = Directory.GetFiles(RootPath, "*", SearchOption.AllDirectories);
-                var dirs = Directory.GetDirectories(RootPath,"*", SearchOption.AllDirectories);
+                RootPath = Environment.CurrentDirectory;
+                RootPath = AppContext.BaseDirectory;
+                if (!App.IsDesktop)
+                    RootPath = RequestAndroidDataPath.Invoke();
+
+                //var files = Directory.GetFiles(RootPath, "*", SearchOption.AllDirectories);
                 SettingsPath = Path.Combine(RootPath, "Settings");
                 Directory.CreateDirectory(SettingsPath);
                 ConfigFile = Path.Combine(RootPath, "Settings", "Config.txt");
@@ -258,6 +267,7 @@ namespace CykieAppLauncher.ViewModels
         }
 
         public ReactiveCommand<Unit, Unit> LaunchCommand { get; }
+
         void PressedLaunch()
         {
             if (LauncherStatus != LauncherState.Ready)
@@ -292,28 +302,19 @@ namespace CykieAppLauncher.ViewModels
                 return;
             LauncherStatus = LauncherState.Launching;
 
-            if (MainView.Current != null)
-                MainView.Current.IsEnabled = false;
-            ProcessStartInfo info = new(LaunchFile)
-            {
-                WorkingDirectory = Path.GetDirectoryName(LaunchFile)
-            };
-
-            Process? process = null;
-
             if (App.TargetPlatform == App.PlatformType.Android)
             {
-                bool e = Avalonia.Platform.AssetLoader.Exists(new(LaunchFile));
-                _ = e;
-                // Assume you have the apk file path stored in a variable called apkPath
-                /*Java.IO.File apkFile = new Java.IO.File (apkPath); 
-                Android.Net.Uri apkUri = Android.Net.Uri.FromFile (apkFile); 
-                Intent intent = new Intent (Intent.ActionView); 
-                intent.SetDataAndType (apkUri, “application/vnd.android.package-archive”); 
-                StartActivity (intent);*/
+                AndroidLaunchAction?.Invoke(LaunchFile);
             }
             else
-                process = Process.Start(info);
+            {
+                ProcessStartInfo info = new(LaunchFile)
+                {
+                    WorkingDirectory = Path.GetDirectoryName(LaunchFile)
+                };
+
+                Process.Start(info);
+            }
 
             if (MainView.Current != null)
                 MainView.Current.IsEnabled = true;
@@ -331,8 +332,9 @@ namespace CykieAppLauncher.ViewModels
             else if (result == MsgBox.MessageBoxResult.Decline)
                 LaunchProgram();
             //Otherwise cancel
+            else
+                LauncherStatus = LauncherState.Ready;
 
-            LauncherStatus = LauncherState.Ready;
         }
 
 
@@ -487,22 +489,21 @@ namespace CykieAppLauncher.ViewModels
                     return false;
 
                 StatusStr = "Installing...";
-                ZipFile.ExtractToDirectory(ProgramZipDest/*.Replace(Version.Invalid.ToString(), latestVersion.ToString())*/, 
-                    Path.GetDirectoryName(LaunchFile), true);
 
-                var files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile), $"*{App.RunnableExtension}", SearchOption.AllDirectories);
-                if (files.Length == 0)
+                using var zipContent = ZipFile.OpenRead(ProgramZipDest);
+                //var files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile), $"*{App.RunnableExtension}", SearchOption.AllDirectories);
+
+                //If the target file is found in the zip the extract it
+                if (zipContent.HasFile(App.RunnableExtension))
                 {
-                    files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile));
-                    //The ZIP was likely the executable itself so delete the extracted contents
-                    for (int i = 0; i < files.Length; i++)
-                        File.Delete(files[i]);
-
-                    File.Move(ProgramZipDest, 
-                        Path.Combine(Path.GetDirectoryName(LaunchFile), Path.GetFileName(ProgramZipDest).Replace(".zip", App.RunnableExtension)));
-                }
-                else
+                    ZipFile.ExtractToDirectory(ProgramZipDest, BuildPath, true);
                     File.Delete(ProgramZipDest);
+                }
+                else //The zip itself is likely the executable
+                {
+                    File.Move(ProgramZipDest,
+                        Path.Combine(BuildPath, Path.GetFileName(ProgramZipDest).Replace(".zip", App.RunnableExtension)));
+                }
             }
             catch (Exception)
             {

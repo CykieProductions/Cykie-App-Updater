@@ -92,9 +92,10 @@ partial class MessageBox : Window
         {
             var buttonPanel = view.MBoxButtons;//view.FindControl<StackPanel>("Buttons");
             buttonPanel.Children.Clear();
+            var mb = view.MessageBox;
 
-            view.MessageBox.IsVisible = true;
-            view.MessageBox.IsEnabled = true;
+            mb.IsVisible = true;
+            mb.IsEnabled = true;
 
             view.MBoxTitle.Text = title;
             view.MBoxMessage.Text = message;
@@ -113,8 +114,8 @@ partial class MessageBox : Window
                 var btn = new Button { Content = caption };
                 btn.Click += (_, __) =>
                 {
-                    view.MessageBox.IsVisible = false;
-                    view.MessageBox.IsEnabled = false;
+                    mb.IsVisible = false;
+                    mb.IsEnabled = false;
                     result = r;
                 };
                 buttonPanel.Children.Add(btn);

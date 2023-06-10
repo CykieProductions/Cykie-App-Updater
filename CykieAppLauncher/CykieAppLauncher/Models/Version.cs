@@ -29,8 +29,14 @@ namespace CykieAppLauncher.Models
         {
             Set(major, minor, patch, revision);
         }
-        public Version(string versionStr)
+        public Version(string? versionStr)
         {
+            if (versionStr == null)
+            {
+                Set(Invalid);
+                return;
+            }
+
             var parts = versionStr.Split('.');
 
             if (parts.Length < 3)

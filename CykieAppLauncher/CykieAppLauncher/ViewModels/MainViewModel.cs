@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -41,7 +42,7 @@ namespace CykieAppLauncher.ViewModels
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public enum LauncherState
         {
-            Ready, Updating, Launching
+            Ready, Updating, Launching, Self_Updating, Finalizing_Self_Update
         }
 
         static LauncherState _launcherStatus = LauncherState.Ready;
@@ -67,6 +68,10 @@ namespace CykieAppLauncher.ViewModels
                                 view.BtnUpdate.IsEnabled = false;
                                 break;
                             case LauncherState.Launching:
+                                view.BtnLaunch.IsEnabled = false;
+                                view.BtnUpdate.IsEnabled = false;
+                                break;
+                            case LauncherState.Self_Updating:
                                 view.BtnLaunch.IsEnabled = false;
                                 view.BtnUpdate.IsEnabled = false;
                                 break;
@@ -106,6 +111,9 @@ namespace CykieAppLauncher.ViewModels
         public static string LaunchFile { get; private set; } = "";
         public static string BuildPath { get => Path.GetDirectoryName(LaunchFile); }
 
+        private static string? SelfConfigFile { get; set; }
+        private string DefaultSelfUpdateZip { get; init; }
+
         public static ConfigurationInfo Config { get; private set; } = new(new string[6]);
 
         public static event Action<string>? AndroidLaunchAction;
@@ -116,8 +124,16 @@ namespace CykieAppLauncher.ViewModels
         public MainViewModel()
         {
             httpClient = new HttpClient();
+            
+
             InitConfig();
             Header = AppName;
+
+            DefaultSelfUpdateZip = Path.Combine(RootPath, "self-update.zip");
+            SelfConfigFile = Path.Combine(RootPath, "Settings", "Launcher.config");
+            if (!File.Exists(SelfConfigFile))
+                SelfConfigFile = null;//use hard coded values
+
 
             if (File.Exists(ProgramZipDest))
                 File.Delete(ProgramZipDest);
@@ -130,10 +146,105 @@ namespace CykieAppLauncher.ViewModels
             UpdateCommand = ReactiveCommand.Create(PressedUpdate);
             LaunchCommand = ReactiveCommand.Create(PressedLaunch);
 
-            if (AutoLaunch)
+            Task startup = new(async () =>
             {
-                OnLaunchClicked(true);
-            }
+                LauncherStatus = LauncherState.Self_Updating;
+                if (await TryUpdateSelf())
+                {
+                    while (LauncherStatus != LauncherState.Finalizing_Self_Update) ;
+
+                    //*https://andreasrohner.at/posts/Programming/C%23/A-platform-independent-way-for-a-C%23-program-to-update-itself/#:~:text=A%20platform%20independent%20way%20for%20a%20C%23%20program,...%203%20Demo%20Project%20...%204%20References%20
+
+                    var updatePath = Path.Combine(RootPath, "self-update");
+
+                    //Exclude Settings
+                    if (Directory.Exists(SettingsPath.Replace(RootPath, updatePath)))
+                        Directory.Delete(SettingsPath.Replace(RootPath, updatePath), true);
+                    //Exclude Builds
+                    if (Directory.Exists(BuildPath.Replace(RootPath, updatePath)))
+                        Directory.Delete(BuildPath.Replace(RootPath, updatePath), true);
+
+                    if (App.TargetPlatform != App.PlatformType.Windows && App.TargetPlatform != App.PlatformType.Android)
+                    {
+                        var files = Directory.GetFiles(updatePath);
+                        List<string> replacedFiles = new();
+
+                        foreach (var file in files)
+                        {
+                            var name = Path.GetFileName(file);
+                            if (name == Environment.ProcessPath)
+                                continue;
+                            replacedFiles.Add(name);
+
+                            try
+                            {
+                                File.Move(file, Path.Combine(RootPath, name), true);
+                            }
+                            catch (Exception)
+                            {
+                                File.Copy(file, Path.Combine(RootPath, name), true);
+                            }
+                        }
+
+                        var directories = Directory.GetDirectories(updatePath);
+                        foreach (var directory in directories)
+                        {
+                            var name = Path.GetDirectoryName(directory);
+                            replacedFiles.Add(name);
+
+                            try
+                            {
+                                Directory.Move(directory, Path.Combine(RootPath, name));
+                            }
+                            catch (IOException ex)
+                            {
+                                Directory.Delete(directory, true);
+                                Directory.Move(directory, Path.Combine(RootPath, name));
+                            }
+                        }
+
+                        var self = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                        Process.Start(self);
+
+                        // Sleep for half a second to avoid an exception
+                        Thread.Sleep(500);
+                        App.Quit();
+
+                    }
+                    else if (App.TargetPlatform == App.PlatformType.Windows)
+                    {
+                        var batFilePath = RootPath + "self-update.bat";
+                        var launcherName = Path.GetFileName(Environment.ProcessPath);
+
+                        string content =
+$@"TIMEOUT /t 1 /nobreak > NUL
+robocopy {updatePath} {RootPath} /MOVE /E
+DEL ""%~f0"" & START """" /B ""{launcherName}""";
+
+                        File.WriteAllText(batFilePath, content);
+
+                        ProcessStartInfo info = new(batFilePath)
+                        {
+                            WorkingDirectory = Path.GetDirectoryName(RootPath)
+                        };
+                        Process.Start(info);
+                    }
+
+
+                    App.Quit();
+
+                    return;
+                }
+                else
+                    LauncherStatus = LauncherState.Ready;
+
+                if (AutoLaunch)
+                {
+                    OnLaunchClicked(true);
+                }
+            });
+
+            startup.RunSynchronously(MainView.Current.SyncedScheduler);
         }
         ~MainViewModel()
         {
@@ -158,7 +269,7 @@ namespace CykieAppLauncher.ViewModels
                     fs.Close();
                 }
 
-                var info = ParseConfigFile(out var config);
+                var info = ParseConfigFile(ConfigFile, out var config);
                 Config = config;
             }
             catch (Exception ex)
@@ -167,9 +278,10 @@ namespace CykieAppLauncher.ViewModels
             }
         }
 
-        private string[] ParseConfigFile(out ConfigurationInfo config)
+        private string[] ParseConfigFile(string? filePath, out ConfigurationInfo config)
         {
-            var info = File.ReadAllLines(ConfigFile);
+            filePath ??= ConfigFile;
+            var info = File.ReadAllLines(filePath);
             if (info.Length < 7)
             {
                 //Default Links
@@ -191,7 +303,7 @@ namespace CykieAppLauncher.ViewModels
                     $"Version Link={vLink}\n" +
                     $"Build Link={bLink}\n" +
                     "Auto Launch=False").Split('\n');
-                File.WriteAllLines(ConfigFile, info);
+                File.WriteAllLines(filePath, info);
             }
             //https://sites.google.com/site/gdocs2direct/home
 
@@ -247,7 +359,7 @@ namespace CykieAppLauncher.ViewModels
                 //Check for an update first so that latest version can be set properly
                 if (await IsUpdateAvailable() || !LocalVersion.IsValid() || !File.Exists(LaunchFile))
                 {
-                    InstallProgramFiles(false, latestVersion);
+                    InstallProgramFiles(false, Config, latestVersion);
                 }
                 else
                 {
@@ -286,9 +398,9 @@ namespace CykieAppLauncher.ViewModels
 
                 LauncherStatus = LauncherState.Updating;
                 if (forceUpdate)
-                    InstallProgramFiles(true, latestVersion);
+                    InstallProgramFiles(true, Config, latestVersion);
                 else
-                    await AskToUpdate();
+                    _ = await AskToUpdate();
                 
                 return;
             }
@@ -322,19 +434,26 @@ namespace CykieAppLauncher.ViewModels
             App.Quit();
         }
 
-        private async Task AskToUpdate()
+        private async Task<MsgBox.MessageBoxResult> AskToUpdate(ConfigurationInfo? config = null, bool allowCancel = true, bool handleResultManually = false)
         {
+            config ??= Config;
+            var buttonSet = allowCancel ? MsgBox.MessageBoxButtons.YesNoCancel : MsgBox.MessageBoxButtons.YesNo;
+
             var result = await MsgBox.MessageBox.Show(App.MainScreen as Window, 
-                "Notice", "There is an update available. Would you like to install it?", MsgBox.MessageBoxButtons.YesNoCancel);
+                "Notice", $"There is an update available for {config.Name}. Would you like to install it?", buttonSet);
+
+            if (handleResultManually)
+                return result;
 
             if (result == MsgBox.MessageBoxResult.Accept)
-                InstallProgramFiles(true, latestVersion);
+                InstallProgramFiles(true, config, latestVersion);
             else if (result == MsgBox.MessageBoxResult.Decline)
                 LaunchProgram();
             //Otherwise cancel
             else
                 LauncherStatus = LauncherState.Ready;
 
+            return result;
         }
 
 
@@ -364,7 +483,7 @@ namespace CykieAppLauncher.ViewModels
 
         private async Task<bool> IsUpdateAvailable()
         {
-            ParseConfigFile(out var config);
+            ParseConfigFile(ConfigFile, out var config);
             Config = config;
 
             Version onlineVersion = Version.Invalid;
@@ -389,25 +508,31 @@ namespace CykieAppLauncher.ViewModels
         }
 
         //https://gist.github.com/yasirkula/d0ec0c07b138748e5feaecbd93b6223c
-        public void InstallProgramFiles(bool launchAfter = false, Version? version = null)
+        public void InstallProgramFiles(bool launchAfter = false, ConfigurationInfo? config = null, Version? version = null, bool isSelfUpdate = false)
         {
+            config ??= Config;
+
+            var zipDest = config.ZipPath;
+            if (string.IsNullOrEmpty(zipDest))
+                zipDest = ProgramZipDest;
+
             StatusStr = "Updating...";
             LauncherStatus = LauncherState.Updating;
 
-            _ = Task.Run(async () =>
+            Task installTask = new(async () =>
             {
                 try
                 {
-                    version ??= new((await httpClient.GetStringAsync(Config.VersionLink)).Trim());
+                    version ??= new((await httpClient.GetStringAsync(config.VersionLink)).Trim());
 
                     //! Ensures that the actual .zip is downloaded from Google Drive
                     int attempts = 0;
-                    var link = new Uri(Config.BuildLink);
+                    var link = new Uri(config.BuildLink);
                     do
                     {
                         var download = Task.Run(async () =>
                         {
-                            await httpClient.DownloadFileTaskAsync(link, ProgramZipDest);
+                            await httpClient.DownloadFileTaskAsync(link, zipDest);
                         });
 
                         string dots = StatusStr.Split('.', 2)[1] + ".";
@@ -419,19 +544,27 @@ namespace CykieAppLauncher.ViewModels
                             StatusStr = "Downloading Files" + dots;
                         }
 
-                        ProcessDriveDownload(ProgramZipDest, out link);
+                        ProcessDriveDownload(zipDest, out link);
                         attempts++;
                     }
-                    while (!OnDownloadFileCompleted() && attempts < 4);
+                    while (!OnDownloadFileCompleted(config, isSelfUpdate ? Path.Combine(RootPath, "self-update") : BuildPath) && attempts < 4);
                 }
                 catch (Exception ex)
                 {
                     throw new Exception("Installation error: " + ex);
                 }
 
+                if (isSelfUpdate)
+                {
+                    LauncherStatus = LauncherState.Finalizing_Self_Update;
+                    return;
+                }
+
                 if (launchAfter)
                     LaunchProgram();
             });
+
+            installTask.RunSynchronously(MainView.Current.SyncedScheduler);
         }
 
         /// <summary>
@@ -481,36 +614,48 @@ namespace CykieAppLauncher.ViewModels
             return true;
         }
 
-        private bool OnDownloadFileCompleted()
+        private bool OnDownloadFileCompleted(ConfigurationInfo? config = null, string? buildPath = null)
         {
+            config ??= Config;
+            buildPath ??= BuildPath;
+            var zipDest = config.ZipPath;
+
             try
             {
-                if (!HelperUtils.IsZipValid(ProgramZipDest))
+                if (!HelperUtils.IsZipValid(zipDest))
                     return false;
 
                 StatusStr = "Installing...";
 
-                using var zipContent = ZipFile.OpenRead(ProgramZipDest);
-                //var files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile), $"*{App.RunnableExtension}", SearchOption.AllDirectories);
+                using (var zipContent = ZipFile.OpenRead(zipDest))
+                {
+                    //var files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile), $"*{App.RunnableExtension}", SearchOption.AllDirectories);
 
-                //If the target file is found in the zip the extract it
-                if (zipContent.HasFile(App.RunnableExtension))
-                {
-                    ZipFile.ExtractToDirectory(ProgramZipDest, BuildPath, true);
-                    File.Delete(ProgramZipDest);
-                }
-                else //The zip itself is likely the executable
-                {
-                    File.Move(ProgramZipDest,
-                        Path.Combine(BuildPath, Path.GetFileName(ProgramZipDest).Replace(".zip", App.RunnableExtension)));
+                    //If the target file is found in the zip the extract it
+                    if (zipContent.HasFile(App.RunnableExtension))
+                    {
+                        ZipFile.ExtractToDirectory(zipDest, buildPath, true);
+                        Thread.Sleep(1000);
+                        try
+                        {
+                            File.Delete(zipDest);
+                        }
+                        catch { }
+                    }
+                    else //The zip itself is likely the executable
+                    {
+                        File.Move(zipDest,
+                            Path.Combine(buildPath, Path.GetFileName(zipDest).Replace(".zip", App.RunnableExtension)));
+                    }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 return false;
             }
 
-            UpdateVersionInfo(latestVersion.ToString());
+            if (config.Name == AppName)
+                UpdateVersionInfo(latestVersion.ToString());
             LauncherStatus = LauncherState.Ready;
 
             StatusStr = "Up to Date";
@@ -533,5 +678,44 @@ namespace CykieAppLauncher.ViewModels
 
             //File.WriteAllText(VersionFile, version);
         }
+
+        private async Task<bool> TryUpdateSelf()
+        {
+            Version onlineVersion = new();
+            ConfigurationInfo config;
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            Version curVersion = new(assembly.GetName().Version?.ToString());
+
+            if (SelfConfigFile == null)
+            {
+                var myZip = DefaultSelfUpdateZip;
+                var vLink = "https://drive.google.com/uc?id=1-gMLfa0JpO1ui-UHlI3OwgDVAR0I2kuW";
+                var bLink = "https://drive.google.com/uc?id=1CAC74wNYPJq5TBhr9VBY_5dwz3j6lrN8";
+
+                config = new(assembly.GetName().Name, curVersion.ToString(), myZip, assembly.Location, vLink, bLink);
+            }
+            else
+            {
+                ParseConfigFile(SelfConfigFile, out config);
+                config = new ConfigurationInfo(config.Name, config.Version, config.ZipPath, assembly.Location, config.VersionLink, config.BuildLink);
+            }
+
+            await Task.Run(async () =>
+            {
+                string onlineVersionStr = (await httpClient.GetStringAsync(config.VersionLink)).Trim();
+                onlineVersion = new Version(onlineVersionStr);
+            });
+
+            if (onlineVersion.Compare(curVersion) <= 0)
+                return false;
+
+            var result = await AskToUpdate(config, false, true);
+
+            if (result == MsgBox.MessageBoxResult.Accept)
+                InstallProgramFiles(false, config, onlineVersion, true);
+
+            return result == MsgBox.MessageBoxResult.Accept;
+        }
+
     }
 }

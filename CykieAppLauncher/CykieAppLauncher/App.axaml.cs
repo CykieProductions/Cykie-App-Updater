@@ -80,7 +80,7 @@ namespace CykieAppLauncher
             base.OnFrameworkInitializationCompleted();
         }
 
-        public static void Quit()
+        public static void Quit(int exitCode = 0)
         {
             if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktopApp)
             {
@@ -94,7 +94,7 @@ namespace CykieAppLauncher
                 if (viewApp.MainView != null)
                 {
                     viewApp.MainView.IsEnabled = false;
-                    Environment.Exit(0);
+                    Environment.Exit(exitCode);
                 }
             }
         }

@@ -86,6 +86,7 @@ namespace CykieAppLauncher.Android
             return null;
         }
 
+        [System.Obsolete]
         public static bool IsAlreadyInstalled(string apkPath)
         {
             var context = Application.Context;

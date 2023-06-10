@@ -31,7 +31,7 @@
 		<Image x:Name="BackgroundImage"
 			   Source="/Assets/background.png"
 			   Stretch="UniformToFill"
-			   Opacity="0.8"
+			   Opacity="0.0"
 			   Margin="0, 64, 0, 0"/>
 
 		<!--Message Box-->

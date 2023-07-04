@@ -9,6 +9,7 @@ using Java.IO;
 using CykieAppLauncher.ViewModels;
 using AndroidX.Core.Content;
 using static Android.Telephony.CarrierConfigManager;
+using CykieAppLauncher.Models;
 
 namespace CykieAppLauncher.Android
 {
@@ -23,8 +24,8 @@ namespace CykieAppLauncher.Android
         internal static void Init()
         {
             if (hasInitialized) return;
-            MainViewModel.AndroidLaunchAction += InstallAndRunAPK;
-            MainViewModel.RequestAndroidDataPath += GetPublicDataPath; ;
+            /*MainViewModel*/Launcher.AndroidLaunchAction += InstallAndRunAPK;
+            /*MainViewModel*/Launcher.RequestAndroidDataPath += GetPublicDataPath; ;
             hasInitialized = true;
         }
 
@@ -77,7 +78,7 @@ namespace CykieAppLauncher.Android
             var apps = packageManager.GetInstalledApplications(0);
             foreach (var app in apps)
             {
-                if (app.Name == MainViewModel.AppName)
+                if (app.Name == MainViewModel.CurLauncher.AppName)
                 {
                     return packageManager.GetLaunchIntentForPackage(app.PackageName);
                 }
@@ -95,7 +96,7 @@ namespace CykieAppLauncher.Android
 
             foreach (var app in apps)
             {
-                if (app.Name == MainViewModel.AppName)
+                if (app.Name == MainViewModel.CurLauncher.AppName)
                     return true;
             }
 

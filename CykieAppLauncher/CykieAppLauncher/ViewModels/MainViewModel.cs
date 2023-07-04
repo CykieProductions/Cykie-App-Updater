@@ -11,7 +11,7 @@ using Avalonia;
 using Avalonia.Controls;
 using CykieAppLauncher.Models;
 using CykieAppLauncher.Views;
-using ReactiveUI; 
+using ReactiveUI;
 
 using Version = CykieAppLauncher.Models.Version;
 
@@ -40,15 +40,12 @@ namespace CykieAppLauncher.ViewModels
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         private static HttpClient httpClient;
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-        public enum LauncherState
-        {
-            Ready, Updating, Launching, Self_Updating, Finalizing_Self_Update
-        }
 
-        static LauncherState _launcherStatus = LauncherState.Ready;
-        public static LauncherState LauncherStatus
+        static Launcher.State _launcherStatus = Launcher.State.Ready;
+        public static Launcher.State LauncherStatus
         {
-            get => _launcherStatus; private set
+            get => CurLauncher == null ? Launcher.State.Finalizing_Self_Update : CurLauncher.LauncherStatus; 
+            private set
             {
                 _launcherStatus = value;
                 if (MainView.Current != null)
@@ -59,19 +56,19 @@ namespace CykieAppLauncher.ViewModels
                     {
                         switch (_launcherStatus)
                         {
-                            case LauncherState.Ready:
+                            case Launcher.State.Ready:
                                 view.BtnLaunch.IsEnabled = true;
                                 view.BtnUpdate.IsEnabled = true;
                                 break;
-                            case LauncherState.Updating:
+                            case Launcher.State.Updating:
                                 view.BtnLaunch.IsEnabled = false;
                                 view.BtnUpdate.IsEnabled = false;
                                 break;
-                            case LauncherState.Launching:
+                            case Launcher.State.Launching:
                                 view.BtnLaunch.IsEnabled = false;
                                 view.BtnUpdate.IsEnabled = false;
                                 break;
-                            case LauncherState.Self_Updating:
+                            case Launcher.State.Self_Updating:
                                 view.BtnLaunch.IsEnabled = false;
                                 view.BtnUpdate.IsEnabled = false;
                                 break;
@@ -83,8 +80,8 @@ namespace CykieAppLauncher.ViewModels
             }
         }
 
-        private Version _localVersion = Version.Default;
-        public Version LocalVersion { get => _localVersion; private set
+        public static Version LocalVersion { get => CurLauncher == null ? Version.Default : CurLauncher.LocalVersion;
+            /*x private set
             {
                 _localVersion = value;
                 if (MainView.Current != null)
@@ -96,9 +93,11 @@ namespace CykieAppLauncher.ViewModels
 
                     task.RunSynchronously(MainView.Current.SyncedScheduler);
                 }
-            }
+            }*/
         }
         Version latestVersion = Version.Default;
+        public static Launcher CurLauncher;
+        private readonly Launcher SelfUpdater;
 
         public static string AppName { get; private set; } = "PROGRAM NAME";
         public static bool AutoLaunch { get; private set; }
@@ -106,13 +105,13 @@ namespace CykieAppLauncher.ViewModels
         public string RootPath { get; private set; } = "";
         public string SettingsPath { get; private set; } = "";
         //public static string VersionFile { get; private set; } = "";
-        public static string ConfigFile { get; private set; } = "";
+        public static string ConfigFilePath { get; private set; } = "";
         public static string ProgramZipDest { get; private set; } = "";
-        public static string LaunchFile { get; private set; } = "";
-        public static string BuildPath { get => Path.GetDirectoryName(LaunchFile); }
+        public static string LaunchFilePath { get; private set; } = "";
+        public static string BuildPath { get => Path.GetDirectoryName(LaunchFilePath); }
 
-        private static string? SelfConfigFile { get; set; }
-        private string DefaultSelfUpdateZip { get; init; }
+        //private static string? SelfConfigFile { get; set; }
+        //private string DefaultSelfUpdateZip { get; init; }
 
         public static ConfigurationInfo Config { get; private set; } = new(new string[6]);
 
@@ -124,34 +123,34 @@ namespace CykieAppLauncher.ViewModels
         public MainViewModel()
         {
             httpClient = new HttpClient();
-            
 
-            InitConfig();
-            Header = AppName;
+            //x InitConfig();
+            RootPath = AppContext.BaseDirectory;
+            if (!App.IsDesktop)
+                RootPath = RequestAndroidDataPath.Invoke();
 
-            DefaultSelfUpdateZip = Path.Combine(RootPath, "self-update.zip");
-            SelfConfigFile = Path.Combine(RootPath, "Settings", "Launcher.config");
-            if (!File.Exists(SelfConfigFile))
-                SelfConfigFile = null;//use hard coded values
+            SettingsPath = Path.Combine(RootPath, "Settings");
+            Directory.CreateDirectory(SettingsPath);
 
+            CurLauncher = new Launcher(Path.Combine(SettingsPath, $"Profile 1.txt"));
+            CurLauncher.BeginDownloadAction += OnBeginDownload;
+            CurLauncher.UpdateCompleteAction += OnUpdateComplete;
+            CurLauncher.OnChangedVersionAction += OnChangedVersion;
+            CurLauncher.RefreshVersion();
 
-            if (File.Exists(ProgramZipDest))
-                File.Delete(ProgramZipDest);
-            //todo REMOVE
-            /*if (Directory.Exists(Path.GetDirectoryName(SettingsPath)))
-                Directory.Delete(Path.GetDirectoryName(SettingsPath), true);
-            if (Directory.Exists(Path.GetDirectoryName(LaunchFile)))
-                Directory.Delete(Path.GetDirectoryName(LaunchFile), true);//*/
+            Header = CurLauncher.AppName;
+
+            SelfUpdater = new Launcher(Path.Combine(RootPath, "Settings", "Launcher.config"), Path.Combine(RootPath, "self-update.zip"), true);
 
             UpdateCommand = ReactiveCommand.Create(PressedUpdate);
             LaunchCommand = ReactiveCommand.Create(PressedLaunch);
 
             Task startup = new(async () =>
             {
-                LauncherStatus = LauncherState.Self_Updating;
+                LauncherStatus = Launcher.State.Self_Updating;
                 if (await TryUpdateSelf())
                 {
-                    while (LauncherStatus != LauncherState.Finalizing_Self_Update) ;
+                    while (LauncherStatus != Launcher.State.Finalizing_Self_Update) ;
 
                     //*https://andreasrohner.at/posts/Programming/C%23/A-platform-independent-way-for-a-C%23-program-to-update-itself/#:~:text=A%20platform%20independent%20way%20for%20a%20C%23%20program,...%203%20Demo%20Project%20...%204%20References%20
 
@@ -236,7 +235,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                     return;
                 }
                 else
-                    LauncherStatus = LauncherState.Ready;
+                    LauncherStatus = Launcher.State.Ready;
 
                 if (AutoLaunch)
                 {
@@ -246,11 +245,26 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
             startup.RunSynchronously(MainView.Current.SyncedScheduler);
         }
+
+        private void OnChangedVersion(Version version)
+        {
+            if (MainView.Current != null)
+            {
+                Task task = new(() =>
+                {
+                    MainView.Current.VersionTxt.Text = "v" + version.ToString();
+                });
+
+                task.RunSynchronously(MainView.Current.SyncedScheduler);
+            }
+        }
+
         ~MainViewModel()
         {
             httpClient.Dispose();
         }
-        private void InitConfig()
+
+        /*x private void InitConfig()
         {
             try
             {
@@ -262,14 +276,14 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                 //var files = Directory.GetFiles(RootPath, "*", SearchOption.AllDirectories);
                 SettingsPath = Path.Combine(RootPath, "Settings");
                 Directory.CreateDirectory(SettingsPath);
-                ConfigFile = Path.Combine(RootPath, "Settings", "Config.txt");
-                if (!File.Exists(ConfigFile))
+                ConfigFilePath = Path.Combine(RootPath, "Settings", "Config.txt");
+                if (!File.Exists(ConfigFilePath))
                 {
-                    var fs = File.Create(ConfigFile);
+                    var fs = File.Create(ConfigFilePath);
                     fs.Close();
                 }
 
-                var info = ParseConfigFile(ConfigFile, out var config);
+                var info = ParseConfigFile(ConfigFilePath, out var config);
                 Config = config;
             }
             catch (Exception ex)
@@ -280,7 +294,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
         private string[] ParseConfigFile(string? filePath, out ConfigurationInfo config)
         {
-            filePath ??= ConfigFile;
+            filePath ??= ConfigFilePath;
             var info = File.ReadAllLines(filePath);
             if (info.Length < 7)
             {
@@ -307,24 +321,15 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             }
             //https://sites.google.com/site/gdocs2direct/home
 
-            /*x Version is now included in Config.txt 
-             * VersionFile = Path.Combine(SettingsPath, "Version.txt");
-            if (!File.Exists(VersionFile))
-            {
-                var fileStream = File.Create(VersionFile);//Will be Version.Invalid
-                fileStream.Close();
-            }*/
+            //set auto values
+            ProgramZipDest = Path.Combine(RootPath, $"{AppName}.zip");
+            LaunchFilePath = Path.Combine(RootPath, $"Build - {AppName}", $"{AppName}{App.RunnableExtension}");
 
             //Set Config from file content
             config = new(info[0].Split('=', 2)[1].Trim(), new Version(info[1].Split('=', 2)[1].Trim()).ToString(),
-                info[2].Split('=', 2)[1].Trim(), info[3].Split('=', 2)[1].Trim(),
+                info[2].Split('=', 2)[1].Trim().Unless("auto", ProgramZipDest), info[3].Split('=', 2)[1].Trim().Unless("auto", LaunchFilePath),
                 info[4].Split('=', 2)[1].Trim(), info[5].Split('=', 2)[1].Trim());
 
-            /*x Version.txt method
-             * Config = new(info[0].Split('=', 2)[1].Trim(),
-                new Version(File.ReadAllText(VersionFile).Trim()).ToString(),
-                info[1].Split('=', 2)[1].Trim(), info[2].Split('=', 2)[1].Trim(),
-                info[3].Split('=', 2)[1].Trim(), info[4].Split('=', 2)[1].Trim());*/
             LocalVersion = new(config.Version);
 
             AppName = config.Name;
@@ -333,41 +338,36 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                 AutoLaunch = r;
 
             //Where to download the Zip to
-            if (config.ZipPath == "auto")
-                ProgramZipDest = Path.Combine(RootPath, $"{AppName}.zip");
-            else
-                ProgramZipDest = config.ZipPath;
+            ProgramZipDest = config.ZipPath;
             //Where will the app launch from
-            if (config.LaunchPath == "auto")
-                LaunchFile = Path.Combine(RootPath, $"Build - {AppName}", $"{AppName}{App.RunnableExtension}");
-            else
-                LaunchFile = config.LaunchPath;
+            LaunchFilePath = config.LaunchPath;
 
             return info;
         }
+        */
 
         public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
         async void PressedUpdate()
         {
             //Don't attempt another update before finishing
-            if (LauncherStatus != LauncherState.Ready)
+            if (LauncherStatus != Launcher.State.Ready)
                 return;
 
-            LauncherStatus = LauncherState.Updating;
+            LauncherStatus = Launcher.State.Updating;
             try
             {
                 //Check for an update first so that latest version can be set properly
-                if (await IsUpdateAvailable() || !LocalVersion.IsValid() || !File.Exists(LaunchFile))
+                if (await CurLauncher.IsUpdateAvailable() || !CurLauncher.LocalVersion.IsValid() || !File.Exists(CurLauncher.LaunchFilePath))
                 {
-                    InstallProgramFiles(false, Config, latestVersion);
+                    CurLauncher.InstallProgramFiles(false);//, Config, latestVersion);
                 }
                 else
                 {
-                    LauncherStatus = LauncherState.Ready;
+                    LauncherStatus = Launcher.State.Ready;
                     StatusStr = "Up to Date";
                     SetUpdateText("Check For Updates", 5f, () =>
                     {
-                        return LauncherStatus != LauncherState.Ready;
+                        return LauncherStatus != Launcher.State.Ready;
                     });
                 }
             }
@@ -382,47 +382,47 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
         void PressedLaunch()
         {
-            if (LauncherStatus != LauncherState.Ready)
+            if (LauncherStatus != Launcher.State.Ready)
                 return;
 
             OnLaunchClicked();
         }
         private async void OnLaunchClicked(bool forceUpdate = false)
         {
-            LauncherStatus = LauncherState.Launching;
+            LauncherStatus = Launcher.State.Launching;
             //Check for an update first so that latest version can be set properly
-            if (await IsUpdateAvailable() || !LocalVersion.IsValid() || !File.Exists(LaunchFile))
+            if (await CurLauncher.IsUpdateAvailable() || !CurLauncher.LocalVersion.IsValid() || !File.Exists(CurLauncher.LaunchFilePath))
             {
                 if (forceUpdate == false)
-                    forceUpdate = !LocalVersion.IsValid() || !File.Exists(LaunchFile);
+                    forceUpdate = !LocalVersion.IsValid() || !File.Exists(LaunchFilePath);
 
-                LauncherStatus = LauncherState.Updating;
+                LauncherStatus = Launcher.State.Updating;
                 if (forceUpdate)
-                    InstallProgramFiles(true, Config, latestVersion);
+                    CurLauncher.InstallProgramFiles(true);//, Config, latestVersion);
                 else
                     _ = await AskToUpdate();
                 
                 return;
             }
 
-            LaunchProgram();
+            CurLauncher.LaunchProgram();
         }
 
-        public static void LaunchProgram()
+        /*x public static void _LaunchProgram()
         {
-            if (!File.Exists(LaunchFile))
+            if (!File.Exists(LaunchFilePath))
                 return;
-            LauncherStatus = LauncherState.Launching;
+            LauncherStatus = Launcher.State.Launching;
 
             if (App.TargetPlatform == App.PlatformType.Android)
             {
-                AndroidLaunchAction?.Invoke(LaunchFile);
+                AndroidLaunchAction?.Invoke(LaunchFilePath);
             }
             else
             {
-                ProcessStartInfo info = new(LaunchFile)
+                ProcessStartInfo info = new(LaunchFilePath)
                 {
-                    WorkingDirectory = Path.GetDirectoryName(LaunchFile)
+                    WorkingDirectory = Path.GetDirectoryName(LaunchFilePath)
                 };
 
                 Process.Start(info);
@@ -433,7 +433,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
             App.Quit();
         }
-
+        */
         private async Task<MsgBox.MessageBoxResult> AskToUpdate(ConfigurationInfo? config = null, bool allowCancel = true, bool handleResultManually = false)
         {
             config ??= Config;
@@ -446,12 +446,12 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                 return result;
 
             if (result == MsgBox.MessageBoxResult.Accept)
-                InstallProgramFiles(true, config, latestVersion);
+                CurLauncher.InstallProgramFiles(true);//, config, latestVersion);
             else if (result == MsgBox.MessageBoxResult.Decline)
-                LaunchProgram();
+                CurLauncher.LaunchProgram();
             //Otherwise cancel
             else
-                LauncherStatus = LauncherState.Ready;
+                LauncherStatus = Launcher.State.Ready;
 
             return result;
         }
@@ -480,10 +480,9 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             StatusStr = text;
         }
 
-
-        private async Task<bool> IsUpdateAvailable()
+        /*x private async Task<bool> _IsUpdateAvailable()
         {
-            ParseConfigFile(ConfigFile, out var config);
+            ParseConfigFile(ConfigFilePath, out var config);
             Config = config;
 
             Version onlineVersion = Version.Invalid;
@@ -508,16 +507,16 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
         }
 
         //https://gist.github.com/yasirkula/d0ec0c07b138748e5feaecbd93b6223c
-        public void InstallProgramFiles(bool launchAfter = false, ConfigurationInfo? config = null, Version? version = null, bool isSelfUpdate = false)
+        public void _InstallProgramFiles(bool launchAfter = false, ConfigurationInfo? config = null, Version? version = null, bool isSelfUpdate = false)
         {
             config ??= Config;
 
             var zipDest = config.ZipPath;
-            if (string.IsNullOrEmpty(zipDest))
+            if (string.IsNullOrEmpty(zipDest) || zipDest == "auto")
                 zipDest = ProgramZipDest;
 
             StatusStr = "Updating...";
-            LauncherStatus = LauncherState.Updating;
+            LauncherStatus = Launcher.State.Updating;
 
             Task installTask = new(async () =>
             {
@@ -547,7 +546,9 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                         ProcessDriveDownload(zipDest, out link);
                         attempts++;
                     }
-                    while (!OnDownloadFileCompleted(config, isSelfUpdate ? Path.Combine(RootPath, "self-update") : BuildPath) && attempts < 4);
+                    while (!WasDownloadSuccessful(config, isSelfUpdate ? Path.Combine(RootPath, "self-update") : BuildPath) && attempts < 4);
+
+                    _ = OnDownloadComplete(config);
                 }
                 catch (Exception ex)
                 {
@@ -556,12 +557,12 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
                 if (isSelfUpdate)
                 {
-                    LauncherStatus = LauncherState.Finalizing_Self_Update;
+                    LauncherStatus = Launcher.State.Finalizing_Self_Update;
                     return;
                 }
 
                 if (launchAfter)
-                    LaunchProgram();
+                    CurLauncher.LaunchProgram();
             });
 
             installTask.RunSynchronously(MainView.Current.SyncedScheduler);
@@ -606,7 +607,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                 int linkEnd = content.IndexOf('"', linkIndex);
                 if (linkEnd >= 0)
                 {
-                    newLink = new Uri(/*"https://drive.google.com" + */content[linkIndex..linkEnd].Replace("&amp;", "&"));
+                    newLink = new Uri(content[linkIndex..linkEnd].Replace("&amp;", "&"));
                     return false;
                 }
             }
@@ -614,10 +615,9 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             return true;
         }
 
-        private bool OnDownloadFileCompleted(ConfigurationInfo? config = null, string? buildPath = null)
+        private bool WasDownloadSuccessful(ConfigurationInfo? config = null, string? buildPath = null)
         {
             config ??= Config;
-            buildPath ??= BuildPath;
             var zipDest = config.ZipPath;
 
             try
@@ -626,45 +626,69 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                     return false;
 
                 StatusStr = "Installing...";
-
-                using (var zipContent = ZipFile.OpenRead(zipDest))
-                {
-                    //var files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile), $"*{App.RunnableExtension}", SearchOption.AllDirectories);
-
-                    //If the target file is found in the zip the extract it
-                    if (zipContent.HasFile(App.RunnableExtension))
-                    {
-                        ZipFile.ExtractToDirectory(zipDest, buildPath, true);
-                        Thread.Sleep(1000);
-                        try
-                        {
-                            File.Delete(zipDest);
-                        }
-                        catch { }
-                    }
-                    else //The zip itself is likely the executable
-                    {
-                        File.Move(zipDest,
-                            Path.Combine(buildPath, Path.GetFileName(zipDest).Replace(".zip", App.RunnableExtension)));
-                    }
-                }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return false;
             }
 
+            return true;
+        }
+
+        private async Task OnDownloadComplete(ConfigurationInfo? config = null, string? buildPath = null)
+        {
+            config ??= Config;
+            buildPath ??= BuildPath;
+            var zipDest = config.ZipPath;
+
+            bool removedZip = false;
+            using (var zipContent = ZipFile.OpenRead(zipDest))
+            {
+                //The zip itself is likely the executable
+                if (!zipContent.HasFile(App.RunnableExtension))
+                {
+                    File.Move(zipDest,
+                        Path.Combine(buildPath, Path.GetFileName(zipDest).Replace(".zip", App.RunnableExtension)));
+                    removedZip = true;
+                }
+            }
+
+            //The target file was found in the zip, so extract it
+            if (!removedZip)
+            {
+                ZipFile.ExtractToDirectory(zipDest, buildPath, true);
+                await Task.Run(() =>
+                {
+
+                    //Attempt to delete the zip a max of [i] times
+                    int i = 12;
+                    while (i-- > 0)
+                    {
+                        Thread.Sleep(1000);
+                        try
+                        {
+                            //The extraction must be complete for this to work
+                            File.Delete(zipDest);
+                            removedZip = true;
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            _ = $"Error: {ex}";
+                        }
+                    }
+                });
+            }
+
             if (config.Name == AppName)
                 UpdateVersionInfo(latestVersion.ToString());
-            LauncherStatus = LauncherState.Ready;
+            LauncherStatus = Launcher.State.Ready;
 
             StatusStr = "Up to Date";
             SetUpdateText("Check For Updates", 10f, () =>
             {
-                return LauncherStatus != LauncherState.Ready;
+                return LauncherStatus != Launcher.State.Ready;
             });
-
-            return true;
         }
 
         void UpdateVersionInfo(string version)
@@ -672,33 +696,22 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             LocalVersion = new(version);
             //if (MainView.Current != null)
                 //MainView.Current.VersionTxt.Text = LocalVersion.ToString();
-            var contents = File.ReadAllLines(ConfigFile);
+            var contents = File.ReadAllLines(ConfigFilePath);
             contents[1] = "Version=" + LocalVersion.ToString();
-            File.WriteAllLines(ConfigFile, contents);
+            File.WriteAllLines(ConfigFilePath, contents);
 
             //File.WriteAllText(VersionFile, version);
         }
+        */
 
         private async Task<bool> TryUpdateSelf()
         {
             Version onlineVersion = new();
-            ConfigurationInfo config;
+            ConfigurationInfo config = SelfUpdater.Config;
             var assembly = System.Reflection.Assembly.GetExecutingAssembly();
             Version curVersion = new(assembly.GetName().Version?.ToString());
 
-            if (SelfConfigFile == null)
-            {
-                var myZip = DefaultSelfUpdateZip;
-                var vLink = "https://drive.google.com/uc?id=1-gMLfa0JpO1ui-UHlI3OwgDVAR0I2kuW";
-                var bLink = "https://drive.google.com/uc?id=1CAC74wNYPJq5TBhr9VBY_5dwz3j6lrN8";
-
-                config = new(assembly.GetName().Name, curVersion.ToString(), myZip, assembly.Location, vLink, bLink);
-            }
-            else
-            {
-                ParseConfigFile(SelfConfigFile, out config);
-                config = new ConfigurationInfo(config.Name, config.Version, config.ZipPath, assembly.Location, config.VersionLink, config.BuildLink);
-            }
+            //! Moved default value setup to the Launcher itself
 
             await Task.Run(async () =>
             {
@@ -712,9 +725,34 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             var result = await AskToUpdate(config, false, true);
 
             if (result == MsgBox.MessageBoxResult.Accept)
-                InstallProgramFiles(false, config, onlineVersion, true);
+                SelfUpdater.InstallProgramFiles(false, config, onlineVersion, true);
 
             return result == MsgBox.MessageBoxResult.Accept;
+        }
+
+        void OnBeginDownload(Task download)
+        {
+            if (!StatusStr.Contains("Downloading Files")) return;
+
+            string dots = StatusStr.Split('.', 2)[1] + ".";
+            //StatusStr = "Downloading Files" + dots;
+            while (!download.IsCompleted)
+            {
+                Thread.Sleep(500);
+                dots = dots == "..." ? "." : (dots == "." ? dots = ".." : "...");
+                StatusStr = "Downloading Files" + dots;
+            }
+        }
+
+        void OnUpdateComplete()
+        {
+            LauncherStatus = Launcher.State.Ready;
+
+            StatusStr = "Up to Date";
+            SetUpdateText("Check For Updates", 10f, () =>
+            {
+                return LauncherStatus != Launcher.State.Ready;
+            });
         }
 
     }

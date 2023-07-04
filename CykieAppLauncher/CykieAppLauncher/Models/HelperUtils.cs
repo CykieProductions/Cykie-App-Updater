@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.IO;
@@ -9,6 +10,14 @@ namespace CykieAppLauncher.Models;
 //https://stackoverflow.com/questions/45711428/download-file-with-webclient-or-httpclient
 public static class HelperUtils
 {
+    public static T Unless<T>(this T self, T exclusion, T conditionalValue) 
+    {
+        if (self == null)
+            return exclusion == null ? conditionalValue : self;
+
+        return self.Equals(exclusion) ? conditionalValue : self;
+    }
+
     public static async Task DownloadFileTaskAsync(this HttpClient client, Uri uri, string fileName)
     {
         using var downloadStream = await client.GetStreamAsync(uri);

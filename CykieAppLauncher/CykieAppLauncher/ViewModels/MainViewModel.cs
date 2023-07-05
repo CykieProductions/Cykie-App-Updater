@@ -44,7 +44,7 @@ namespace CykieAppLauncher.ViewModels
         static Launcher.State _launcherStatus = Launcher.State.Ready;
         public static Launcher.State LauncherStatus
         {
-            get => CurLauncher == null ? Launcher.State.Finalizing_Self_Update : CurLauncher.LauncherStatus; 
+            get => CurLauncher == null ? Launcher.State.Finalizing : CurLauncher.LauncherStatus; 
             private set
             {
                 _launcherStatus = value;
@@ -80,35 +80,14 @@ namespace CykieAppLauncher.ViewModels
             }
         }
 
-        public static Version LocalVersion { get => CurLauncher == null ? Version.Default : CurLauncher.LocalVersion;
-            /*x private set
-            {
-                _localVersion = value;
-                if (MainView.Current != null)
-                {
-                    Task task = new(() =>
-                    {
-                        MainView.Current.VersionTxt.Text = "v" + _localVersion.ToString();
-                    });
-
-                    task.RunSynchronously(MainView.Current.SyncedScheduler);
-                }
-            }*/
-        }
-        Version latestVersion = Version.Default;
+        public static Version LocalVersion { get => CurLauncher == null ? Version.Invalid : CurLauncher.LocalVersion; }
         public static Launcher CurLauncher;
         private readonly Launcher SelfUpdater;
 
-        public static string AppName { get; private set; } = "PROGRAM NAME";
         public static bool AutoLaunch { get; private set; }
 
         public string RootPath { get; private set; } = "";
         public string SettingsPath { get; private set; } = "";
-        //public static string VersionFile { get; private set; } = "";
-        public static string ConfigFilePath { get; private set; } = "";
-        public static string ProgramZipDest { get; private set; } = "";
-        public static string LaunchFilePath { get; private set; } = "";
-        public static string BuildPath { get => Path.GetDirectoryName(LaunchFilePath); }
 
         //private static string? SelfConfigFile { get; set; }
         //private string DefaultSelfUpdateZip { get; init; }
@@ -124,7 +103,6 @@ namespace CykieAppLauncher.ViewModels
         {
             httpClient = new HttpClient();
 
-            //x InitConfig();
             RootPath = AppContext.BaseDirectory;
             if (!App.IsDesktop)
                 RootPath = RequestAndroidDataPath.Invoke();
@@ -140,7 +118,8 @@ namespace CykieAppLauncher.ViewModels
 
             Header = CurLauncher.AppName;
 
-            SelfUpdater = new Launcher(Path.Combine(RootPath, "Settings", "Launcher.config"), Path.Combine(RootPath, "self-update.zip"), true);
+            SelfUpdater = new Launcher(Path.Combine(RootPath, "Settings", "Launcher.config"), Path.Combine(RootPath, "self-update.zip"),
+                Path.Combine(RootPath, "self-update"), true);
 
             UpdateCommand = ReactiveCommand.Create(PressedUpdate);
             LaunchCommand = ReactiveCommand.Create(PressedLaunch);
@@ -150,21 +129,55 @@ namespace CykieAppLauncher.ViewModels
                 LauncherStatus = Launcher.State.Self_Updating;
                 if (await TryUpdateSelf())
                 {
-                    while (LauncherStatus != Launcher.State.Finalizing_Self_Update) ;
+                    int maxWait = 20;
+                    while (SelfUpdater.LauncherStatus != Launcher.State.Finalizing && maxWait-- > 0)
+                    {
+                        Thread.Sleep(1000);
+                    }
 
                     //*https://andreasrohner.at/posts/Programming/C%23/A-platform-independent-way-for-a-C%23-program-to-update-itself/#:~:text=A%20platform%20independent%20way%20for%20a%20C%23%20program,...%203%20Demo%20Project%20...%204%20References%20
 
                     var updatePath = Path.Combine(RootPath, "self-update");
 
                     //Exclude Settings
-                    if (Directory.Exists(SettingsPath.Replace(RootPath, updatePath)))
-                        Directory.Delete(SettingsPath.Replace(RootPath, updatePath), true);
+                    var tmpSettingsPath = Path.Combine(updatePath, new DirectoryInfo(SettingsPath).Name);
+                    if (Directory.Exists(tmpSettingsPath))
+                        Directory.Delete(tmpSettingsPath, true);
                     //Exclude Builds
-                    if (Directory.Exists(BuildPath.Replace(RootPath, updatePath)))
-                        Directory.Delete(BuildPath.Replace(RootPath, updatePath), true);
-
-                    if (App.TargetPlatform != App.PlatformType.Windows && App.TargetPlatform != App.PlatformType.Android)
+                    var buildPaths = Directory.GetDirectories(updatePath, $"{Launcher.BUILD_DIR_PREFIX}*", SearchOption.TopDirectoryOnly);
+                    for (int i = 0; i < buildPaths.Length; i++)
                     {
+                        try
+                        {
+                            Directory.Delete(buildPaths[i], true);
+                        }
+                        catch { }
+                    }
+
+                    //Windows update
+                    if (App.TargetPlatform == App.PlatformType.Windows)
+                    {
+                        var batFilePath = RootPath + "self-update.bat";
+                        var launcherName = Path.GetFileName(Environment.ProcessPath);
+
+                        string content =
+$@"TIMEOUT /t 1 /nobreak > NUL
+robocopy {updatePath} {RootPath} /MOVE /E
+RD /S /Q {updatePath}
+DEL ""%~f0"" & START """" /B ""{launcherName}""";
+
+                        File.WriteAllText(batFilePath, content);
+
+                        ProcessStartInfo info = new(batFilePath)
+                        {
+                            WorkingDirectory = Path.GetDirectoryName(RootPath)
+                        };
+                        Process.Start(info);
+                    }
+                    //TODO add self update logic for all platforms
+                    else if (App.TargetPlatform == App.PlatformType.Linux || App.TargetPlatform == App.PlatformType.Web)
+                    {
+                        //TODO this is untested
                         var files = Directory.GetFiles(updatePath);
                         List<string> replacedFiles = new();
 
@@ -210,24 +223,6 @@ namespace CykieAppLauncher.ViewModels
                         App.Quit();
 
                     }
-                    else if (App.TargetPlatform == App.PlatformType.Windows)
-                    {
-                        var batFilePath = RootPath + "self-update.bat";
-                        var launcherName = Path.GetFileName(Environment.ProcessPath);
-
-                        string content =
-$@"TIMEOUT /t 1 /nobreak > NUL
-robocopy {updatePath} {RootPath} /MOVE /E
-DEL ""%~f0"" & START """" /B ""{launcherName}""";
-
-                        File.WriteAllText(batFilePath, content);
-
-                        ProcessStartInfo info = new(batFilePath)
-                        {
-                            WorkingDirectory = Path.GetDirectoryName(RootPath)
-                        };
-                        Process.Start(info);
-                    }
 
 
                     App.Quit();
@@ -263,88 +258,6 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
         {
             httpClient.Dispose();
         }
-
-        /*x private void InitConfig()
-        {
-            try
-            {
-                RootPath = Environment.CurrentDirectory;
-                RootPath = AppContext.BaseDirectory;
-                if (!App.IsDesktop)
-                    RootPath = RequestAndroidDataPath.Invoke();
-
-                //var files = Directory.GetFiles(RootPath, "*", SearchOption.AllDirectories);
-                SettingsPath = Path.Combine(RootPath, "Settings");
-                Directory.CreateDirectory(SettingsPath);
-                ConfigFilePath = Path.Combine(RootPath, "Settings", "Config.txt");
-                if (!File.Exists(ConfigFilePath))
-                {
-                    var fs = File.Create(ConfigFilePath);
-                    fs.Close();
-                }
-
-                var info = ParseConfigFile(ConfigFilePath, out var config);
-                Config = config;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error: {ex}");
-            }
-        }
-
-        private string[] ParseConfigFile(string? filePath, out ConfigurationInfo config)
-        {
-            filePath ??= ConfigFilePath;
-            var info = File.ReadAllLines(filePath);
-            if (info.Length < 7)
-            {
-                //Default Links
-                string defName = "Blooming Darkness";
-                string vLink = "https://drive.google.com/uc?export=download&id=1yTkCTalsDPKeJ2kpAgIAZMGvv82qZ9dh";
-                string bLink = "https://drive.google.com/uc?export=download&id=1FpTxX1L3-CBd5lTM29Wzm3G_JUpXxNAK";
-
-                if (!App.IsDesktop)
-                {
-                    defName = "Meeting Time";
-                    vLink = "https://drive.google.com/uc?export=download&id=1LW56nibL44OpIqPrDrwMlG3pY4QvcjgZ";
-                    bLink = "https://drive.google.com/uc?export=download&id=14Y_iXKvY9tfoBdRZFiCj__vrt6pZHUZX";
-                }
-
-                info = ($"App Name={defName}\n" +
-                    "Version=\n" +
-                    "Zip Path=auto\n" +
-                    "Launch Path=auto\n" +
-                    $"Version Link={vLink}\n" +
-                    $"Build Link={bLink}\n" +
-                    "Auto Launch=False").Split('\n');
-                File.WriteAllLines(filePath, info);
-            }
-            //https://sites.google.com/site/gdocs2direct/home
-
-            //set auto values
-            ProgramZipDest = Path.Combine(RootPath, $"{AppName}.zip");
-            LaunchFilePath = Path.Combine(RootPath, $"Build - {AppName}", $"{AppName}{App.RunnableExtension}");
-
-            //Set Config from file content
-            config = new(info[0].Split('=', 2)[1].Trim(), new Version(info[1].Split('=', 2)[1].Trim()).ToString(),
-                info[2].Split('=', 2)[1].Trim().Unless("auto", ProgramZipDest), info[3].Split('=', 2)[1].Trim().Unless("auto", LaunchFilePath),
-                info[4].Split('=', 2)[1].Trim(), info[5].Split('=', 2)[1].Trim());
-
-            LocalVersion = new(config.Version);
-
-            AppName = config.Name;
-            //Set Auto Launch
-            if (bool.TryParse(info[^1].Split('=', 2)[1], out bool r))
-                AutoLaunch = r;
-
-            //Where to download the Zip to
-            ProgramZipDest = config.ZipPath;
-            //Where will the app launch from
-            LaunchFilePath = config.LaunchPath;
-
-            return info;
-        }
-        */
 
         public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
         async void PressedUpdate()
@@ -394,7 +307,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             if (await CurLauncher.IsUpdateAvailable() || !CurLauncher.LocalVersion.IsValid() || !File.Exists(CurLauncher.LaunchFilePath))
             {
                 if (forceUpdate == false)
-                    forceUpdate = !LocalVersion.IsValid() || !File.Exists(LaunchFilePath);
+                    forceUpdate = !LocalVersion.IsValid() || !File.Exists(CurLauncher.LaunchFilePath);
 
                 LauncherStatus = Launcher.State.Updating;
                 if (forceUpdate)
@@ -408,33 +321,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             CurLauncher.LaunchProgram();
         }
 
-        /*x public static void _LaunchProgram()
-        {
-            if (!File.Exists(LaunchFilePath))
-                return;
-            LauncherStatus = Launcher.State.Launching;
-
-            if (App.TargetPlatform == App.PlatformType.Android)
-            {
-                AndroidLaunchAction?.Invoke(LaunchFilePath);
-            }
-            else
-            {
-                ProcessStartInfo info = new(LaunchFilePath)
-                {
-                    WorkingDirectory = Path.GetDirectoryName(LaunchFilePath)
-                };
-
-                Process.Start(info);
-            }
-
-            if (MainView.Current != null)
-                MainView.Current.IsEnabled = true;
-
-            App.Quit();
-        }
-        */
-        private async Task<MsgBox.MessageBoxResult> AskToUpdate(ConfigurationInfo? config = null, bool allowCancel = true, bool handleResultManually = false)
+        private static async Task<MsgBox.MessageBoxResult> AskToUpdate(ConfigurationInfo? config = null, bool allowCancel = true, bool handleResultManually = false)
         {
             config ??= Config;
             var buttonSet = allowCancel ? MsgBox.MessageBoxButtons.YesNoCancel : MsgBox.MessageBoxButtons.YesNo;
@@ -711,21 +598,24 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             var assembly = System.Reflection.Assembly.GetExecutingAssembly();
             Version curVersion = new(assembly.GetName().Version?.ToString());
 
-            //! Moved default value setup to the Launcher itself
-
             await Task.Run(async () =>
             {
-                string onlineVersionStr = (await httpClient.GetStringAsync(config.VersionLink)).Trim();
-                onlineVersion = new Version(onlineVersionStr);
+                try
+                {
+                    string onlineVersionStr = (await httpClient.GetStringAsync(config.VersionLink)).Trim();
+                    onlineVersion = new Version(onlineVersionStr);
+                }
+                catch { onlineVersion = Version.Invalid; }
             });
 
-            if (onlineVersion.Compare(curVersion) <= 0)
+            //If the online version is invalid or if it isn't new then ignore it
+            if (!onlineVersion.IsValid() || onlineVersion.CompareTo(curVersion) <= 0)
                 return false;
 
             var result = await AskToUpdate(config, false, true);
 
             if (result == MsgBox.MessageBoxResult.Accept)
-                SelfUpdater.InstallProgramFiles(false, config, onlineVersion, true);
+                SelfUpdater.InstallProgramFiles(false, config, onlineVersion);
 
             return result == MsgBox.MessageBoxResult.Accept;
         }

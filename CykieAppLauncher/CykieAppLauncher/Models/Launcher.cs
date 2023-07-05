@@ -18,11 +18,15 @@ public class Launcher
     //! STATIC //
     public string RootPath { get; private set; } = "";
     public string SettingsPath { get; private set; } = "";
+
+    private const int MAX_DOWNLOAD_ATTEMPTS = 4;
+    private const int MAX_ZIP_DELETE_ATTEMPTS = 12;
+    public const string BUILD_DIR_PREFIX = "Build - ";
     private static readonly HttpClient httpClient = new();
 
     public enum State
     {
-        Ready, Updating, Launching, Self_Updating, Finalizing_Self_Update
+        Ready, Updating, Launching, Self_Updating, Finalizing
     }
 
 
@@ -60,7 +64,7 @@ public class Launcher
     public string ConfigFilePath { get; private set; } = "";
     public string? ProgramZipDest { get; private set; } = null;
     public string? LaunchFilePath { get; private set; } = null;
-    public string BuildPath { get => Path.GetDirectoryName(LaunchFilePath); }
+    public string BuildPath { get; private set; }
 
     //! EVENTS //
     public static event Action<string>? AndroidLaunchAction;
@@ -76,7 +80,7 @@ public class Launcher
     public event Action? UpdateCompleteAction;
 
 
-    public Launcher(string configPath, string? zipPath = null, bool isSelfUpdater = false) 
+    public Launcher(string configPath, string? zipPath = null, string? buildPath = null, bool isSelfUpdater = false) 
     {
         IsSelfUpdater = isSelfUpdater;
 
@@ -85,8 +89,12 @@ public class Launcher
             RootPath = RequestAndroidDataPath.Invoke();
 
         SettingsPath = Path.Combine(RootPath, "Settings");
-        ProgramZipDest = zipPath;
         ConfigFilePath = configPath;
+        
+        //null is accounted for in InitConfig()
+        ProgramZipDest = zipPath;
+        BuildPath = buildPath;
+
 
         InitConfig();
     }
@@ -116,6 +124,8 @@ public class Launcher
                 LocalVersion = new(Config.Version);
                 LaunchFilePath = Config.LaunchPath;
             }
+
+            BuildPath ??= Path.GetDirectoryName(LaunchFilePath) ?? $"{BUILD_DIR_PREFIX}NAME ERROR";
         }
         catch (Exception ex)
         {
@@ -169,7 +179,7 @@ public class Launcher
         var name = info[0].Split('=', 2)[1].Trim();
         //set auto values
             ProgramZipDest ??= Path.Combine(RootPath, $"{name}.zip");
-            LaunchFilePath ??= Path.Combine(RootPath, $"Build - {name}", $"{name}{App.RunnableExtension}");
+            LaunchFilePath ??= Path.Combine(RootPath, $"{BUILD_DIR_PREFIX}{name}", $"{name}{App.RunnableExtension}");
 
         //Set Config from file content
         config = new(name, new Version(info[1].Split('=', 2)[1].Trim()).ToString(),
@@ -206,13 +216,12 @@ public class Launcher
     void UpdateVersionInfo(string version)
     {
         LocalVersion = new(version);
-        //if (MainView.Current != null)
-        //MainView.Current.VersionTxt.Text = LocalVersion.ToString();
-        var contents = File.ReadAllLines(ConfigFilePath);
-        contents[1] = "Version=" + LocalVersion.ToString();
-        File.WriteAllLines(ConfigFilePath, contents);
-
-        //File.WriteAllText(VersionFile, version);
+        if (File.Exists(ConfigFilePath))
+        {
+            var contents = File.ReadAllLines(ConfigFilePath);
+            contents[1] = "Version=" + LocalVersion.ToString();
+            File.WriteAllLines(ConfigFilePath, contents);
+        }
     }
 
     public async Task<bool> IsUpdateAvailable()
@@ -234,14 +243,14 @@ public class Launcher
 
         latestVersion = LocalVersion;
 
-        if (LocalVersion.Compare(onlineVersion) >= 0)
+        if (LocalVersion.CompareTo(onlineVersion) >= 0)
             return false;
 
         latestVersion = onlineVersion;
         return true;
     }
 
-    public void InstallProgramFiles(bool launchAfter = false, ConfigurationInfo? config = null, Version? version = null, bool isSelfUpdate = false)
+    public void InstallProgramFiles(bool launchAfter = false, ConfigurationInfo? config = null, Version? version = null)
     {
         if (LauncherStatus != State.Ready) return;
 
@@ -279,19 +288,14 @@ public class Launcher
                     ProcessDriveDownload(zipDest, out link);
                     attempts++;
                 }
-                while (!WasDownloadSuccessful(config, isSelfUpdate ? Path.Combine(RootPath, "self-update") : BuildPath) && attempts < 4);
+                while (!WasDownloadSuccessful(config) && attempts < MAX_DOWNLOAD_ATTEMPTS);
 
+                //Path.Combine(RootPath, "self-update")
                 _ = OnDownloadComplete();
             }
             catch (Exception ex)
             {
                 throw new Exception("Installation error: " + ex);
-            }
-
-            if (isSelfUpdate)
-            {
-                LauncherStatus = State.Finalizing_Self_Update;
-                return;
             }
 
             if (launchAfter)
@@ -376,58 +380,7 @@ public class Launcher
         return true;
     }
 
-    [Obsolete($"Use {nameof(WasDownloadSuccessful)} instead and then call {nameof(OnDownloadComplete)} afterwards")]
-    private bool OnDownloadFileCompleted(ConfigurationInfo? config = null, string? buildPath = null)
-    {
-        config ??= Config;
-        buildPath ??= BuildPath;
-        var zipDest = config.ZipPath;
-
-        try
-        {
-            if (!HelperUtils.IsZipValid(zipDest))
-                return false;
-
-            //StatusStr = "Installing...";
-            BeginInstallAction?.Invoke();
-
-            using (var zipContent = ZipFile.OpenRead(zipDest))
-            {
-                //var files = Directory.GetFiles(Path.GetDirectoryName(LaunchFile), $"*{App.RunnableExtension}", SearchOption.AllDirectories);
-
-                //If the target file is found in the zip the extract it
-                if (zipContent.HasFile(App.RunnableExtension))
-                {
-                    ZipFile.ExtractToDirectory(zipDest, buildPath, true);
-                    Thread.Sleep(1000);
-                    try
-                    {
-                        File.Delete(zipDest);
-                    }
-                    catch { }
-                }
-                else //The zip itself is likely the executable
-                {
-                    File.Move(zipDest,
-                        Path.Combine(buildPath, Path.GetFileName(zipDest).Replace(".zip", App.RunnableExtension)));
-                }
-            }
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-
-        if (config.Name == AppName)
-            UpdateVersionInfo(latestVersion.ToString());
-
-        LauncherStatus = State.Ready;
-        UpdateCompleteAction?.Invoke();
-
-        return true;
-    }
-
-    private bool WasDownloadSuccessful(ConfigurationInfo? config = null, string? buildPath = null)
+    private bool WasDownloadSuccessful(ConfigurationInfo? config = null)
     {
         config ??= Config;
         var zipDest = config.ZipPath;
@@ -453,7 +406,6 @@ public class Launcher
 
         BeginInstallAction?.Invoke();
 
-        bool removedZip = false;
         using (var zipContent = ZipFile.OpenRead(zipDest))
         {
             //The zip itself is likely the executable
@@ -461,19 +413,19 @@ public class Launcher
             {
                 File.Move(zipDest,
                     Path.Combine(buildPath, Path.GetFileName(zipDest).Replace(".zip", App.RunnableExtension)));
-                removedZip = true;
+                LauncherStatus = State.Finalizing;
             }
         }
 
         //The target file was found in the zip, so extract it
-        if (!removedZip)
+        if (LauncherStatus != State.Finalizing)
         {
             ZipFile.ExtractToDirectory(zipDest, buildPath, true);
             await Task.Run(() =>
             {
 
                 //Attempt to delete the zip a max of [i] times
-                int i = 12;
+                int i = MAX_ZIP_DELETE_ATTEMPTS;
                 while (i-- > 0)
                 {
                     Thread.Sleep(1000);
@@ -481,7 +433,7 @@ public class Launcher
                     {
                         //The extraction must be complete for this to work
                         File.Delete(zipDest);
-                        removedZip = true;
+                        LauncherStatus = State.Finalizing;
                         break;
                     }
                     catch (Exception ex)
@@ -492,6 +444,7 @@ public class Launcher
             });
         }
 
+        //? If this is a self update, this doesn't run until the app is starting to close
         UpdateVersionInfo(latestVersion.ToString());
 
         LauncherStatus = State.Ready;

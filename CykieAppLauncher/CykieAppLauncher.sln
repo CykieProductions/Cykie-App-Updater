@@ -3,15 +3,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.6.33723.286
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher", "CykieAppLauncher\CykieAppLauncher.csproj", "{0462F635-79F5-4FED-A5BC-73F735F9FF0F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CykieAppLauncher", "CykieAppLauncher\CykieAppLauncher.csproj", "{0462F635-79F5-4FED-A5BC-73F735F9FF0F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.Android", "CykieAppLauncher.Android\CykieAppLauncher.Android.csproj", "{1473E56B-DC22-4265-962E-B53428323E5A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CykieAppLauncher.Android", "CykieAppLauncher.Android\CykieAppLauncher.Android.csproj", "{1473E56B-DC22-4265-962E-B53428323E5A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.Desktop", "CykieAppLauncher.Desktop\CykieAppLauncher.Desktop.csproj", "{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CykieAppLauncher.Desktop", "CykieAppLauncher.Desktop\CykieAppLauncher.Desktop.csproj", "{5DA22BB6-E912-41C0-B49D-85AA06A69ADB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.iOS", "CykieAppLauncher.iOS\CykieAppLauncher.iOS.csproj", "{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CykieAppLauncher.iOS", "CykieAppLauncher.iOS\CykieAppLauncher.iOS.csproj", "{1CE099C8-3E35-4AD7-BCD4-415FA3BFC396}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieAppLauncher.Browser", "CykieAppLauncher.Browser\CykieAppLauncher.Browser.csproj", "{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CykieSelfUpdater", "CykieSelfUpdater\CykieSelfUpdater.csproj", "{E8FA8022-B40C-40C5-84A2-B39E98CA889B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -43,6 +45,10 @@ Global
 		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EFD5C0E1-B471-43BE-8910-1E5EAEC0DB65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E8FA8022-B40C-40C5-84A2-B39E98CA889B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8FA8022-B40C-40C5-84A2-B39E98CA889B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8FA8022-B40C-40C5-84A2-B39E98CA889B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8FA8022-B40C-40C5-84A2-B39E98CA889B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

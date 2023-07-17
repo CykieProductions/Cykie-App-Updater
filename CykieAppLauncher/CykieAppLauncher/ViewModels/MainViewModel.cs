@@ -102,6 +102,7 @@ namespace CykieAppLauncher.ViewModels
         public MainViewModel()
         {
             httpClient = new HttpClient();
+            Launcher.RequestMainScheduler += GetMainScheduler;
 
             RootPath = AppContext.BaseDirectory;
             if (!App.IsDesktop)
@@ -119,7 +120,7 @@ namespace CykieAppLauncher.ViewModels
             Header = CurLauncher.AppName;
 
             SelfUpdater = new Launcher(Path.Combine(RootPath, "Settings", "Launcher.config"), Path.Combine(RootPath, "self-update.zip"),
-                Path.Combine(RootPath, "self-update"), true);
+                Path.Combine(RootPath, "self-update"), isSelfUpdater: true);
 
             UpdateCommand = ReactiveCommand.Create(PressedUpdate);
             LaunchCommand = ReactiveCommand.Create(PressedLaunch);
@@ -135,8 +136,9 @@ namespace CykieAppLauncher.ViewModels
                         Thread.Sleep(1000);
                     }
 
-                    //*https://andreasrohner.at/posts/Programming/C%23/A-platform-independent-way-for-a-C%23-program-to-update-itself/#:~:text=A%20platform%20independent%20way%20for%20a%20C%23%20program,...%203%20Demo%20Project%20...%204%20References%20
+                    SelfUpdater.UpdateSelfAndRestart();
 
+                    /*x https://andreasrohner.at/posts/Programming/C%23/A-platform-independent-way-for-a-C%23-program-to-update-itself/#:~:text=A%20platform%20independent%20way%20for%20a%20C%23%20program,...%203%20Demo%20Project%20...%204%20References%20
                     var updatePath = Path.Combine(RootPath, "self-update");
 
                     //Exclude Settings
@@ -155,7 +157,7 @@ namespace CykieAppLauncher.ViewModels
                     }
 
                     //Windows update
-                    if (App.TargetPlatform == App.PlatformType.Windows)
+                    if (AppInfo.TargetPlatform == AppInfo.PlatformType.Windows)
                     {
                         var batFilePath = RootPath + "self-update.bat";
                         var launcherName = Path.GetFileName(Environment.ProcessPath);
@@ -175,7 +177,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                         Process.Start(info);
                     }
                     //TODO add self update logic for all platforms
-                    else if (App.TargetPlatform == App.PlatformType.Linux || App.TargetPlatform == App.PlatformType.Web)
+                    else if (AppInfo.TargetPlatform == AppInfo.PlatformType.Linux || AppInfo.TargetPlatform == AppInfo.PlatformType.Web)
                     {
                         //TODO this is untested
                         var files = Directory.GetFiles(updatePath);
@@ -220,13 +222,10 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
                         // Sleep for half a second to avoid an exception
                         Thread.Sleep(500);
-                        App.Quit();
 
                     }
-
-
-                    App.Quit();
-
+                    
+                    App.Quit();//*/
                     return;
                 }
                 else
@@ -239,6 +238,11 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             });
 
             startup.RunSynchronously(MainView.Current.SyncedScheduler);
+        }
+
+        private TaskScheduler GetMainScheduler()
+        {
+            return MainView.Current?.SyncedScheduler ?? TaskScheduler.Default;
         }
 
         private void OnChangedVersion(Version version)
@@ -257,6 +261,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
         ~MainViewModel()
         {
             httpClient.Dispose();
+            Launcher.RequestMainScheduler -= GetMainScheduler;
         }
 
         public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
@@ -300,7 +305,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
 
             OnLaunchClicked();
         }
-        private async void OnLaunchClicked(bool forceUpdate = false)
+        private static async void OnLaunchClicked(bool forceUpdate = false)
         {
             LauncherStatus = Launcher.State.Launching;
             //Check for an update first so that latest version can be set properly

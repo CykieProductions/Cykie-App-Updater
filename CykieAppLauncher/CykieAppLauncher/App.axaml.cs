@@ -1,101 +1,68 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using CykieAppLauncher.ViewModels;
 using CykieAppLauncher.Views;
+using CykieAppLauncher.Models;
 using System;
 
-namespace CykieAppLauncher
+namespace CykieAppLauncher;
+
+public partial class App : Application
 {
-    public partial class App : Application
+    public static bool IsDesktop { get => Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime; }
+    public static ContentControl MainScreen { get; private set; }
+
+    public override void Initialize()
     {
-        public enum PlatformType
+        AppInfo.TryInit();
+        Launcher.QuitAction += Quit;
+        AvaloniaXamlLoader.Load(this);
+    }
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            Windows, Linux, MacOS, Android, iOS, Web
+            desktop.MainWindow = new MainWindow
+            {
+                DataContext = new MainViewModel()
+            };
+            MainScreen = desktop.MainWindow;
+        }
+        else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
+        {
+            var view = new MainView
+            {
+                DataContext = new MainViewModel()
+            };
+            singleViewPlatform.MainView = view;
+            MainScreen = view;
         }
 
-        public static bool IsDesktop { get => Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime; }
-        public static PlatformType TargetPlatform { get; private set; } = PlatformType.Windows;
-        public static string RunnableExtension { get; private set; } = ".exe";
-        public static ContentControl MainScreen { get; private set; }
+        base.OnFrameworkInitializationCompleted();
+    }
 
-        public override void Initialize()
+    /// <summary>
+    /// Exits the program
+    /// </summary>
+    /// <param name="exitCode">0 means normal exit; 1 means launch exit; 2 means self-update exit; -1 means generic forced crash</param>
+    public static void Quit(int exitCode = 0)
+    {
+        if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktopApp)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                TargetPlatform = PlatformType.Windows;
-                RunnableExtension = ".exe";
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                TargetPlatform = PlatformType.Linux;
-                RunnableExtension = ".run";
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                TargetPlatform = PlatformType.MacOS;
-                RunnableExtension = ".app";
-            }
-            else if (OperatingSystem.IsAndroid())
-            {
-                TargetPlatform = PlatformType.Android;
-                RunnableExtension = ".apk";
-            }
-            else if (OperatingSystem.IsIOS())
-            {
-                TargetPlatform = PlatformType.iOS;
-                RunnableExtension = ".ipa";
-            }
-            else if (false)//Web is disabled for now
-            {
-                TargetPlatform = PlatformType.Web;
-                RunnableExtension = ".html";
-            }
-
-                AvaloniaXamlLoader.Load(this);
+            desktopApp.Shutdown();
         }
-
-        public override void OnFrameworkInitializationCompleted()
+        else if (Current?.ApplicationLifetime is ISingleViewApplicationLifetime viewApp)
         {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                desktop.MainWindow = new MainWindow
-                {
-                    DataContext = new MainViewModel()
-                };
-                MainScreen = desktop.MainWindow;
-            }
-            else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
-            {
-                var view = new MainView
-                {
-                    DataContext = new MainViewModel()
-                };
-                singleViewPlatform.MainView = view;
-                MainScreen = view;
-            }
+            //This just hangs the app
+            //viewApp.MainView = null;
 
-            base.OnFrameworkInitializationCompleted();
-        }
-
-        public static void Quit(int exitCode = 0)
-        {
-            if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktopApp)
+            if (viewApp.MainView != null)
             {
-                desktopApp.Shutdown();
-            }
-            else if (Current?.ApplicationLifetime is ISingleViewApplicationLifetime viewApp)
-            {
-                //This just hangs the app
-                //viewApp.MainView = null;
-
-                if (viewApp.MainView != null)
-                {
-                    viewApp.MainView.IsEnabled = false;
-                    Environment.Exit(exitCode);
-                }
+                viewApp.MainView.IsEnabled = false;
+                Environment.Exit(exitCode);
             }
         }
     }

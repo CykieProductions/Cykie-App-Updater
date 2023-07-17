@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using CykieAppLauncher.ViewModels;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

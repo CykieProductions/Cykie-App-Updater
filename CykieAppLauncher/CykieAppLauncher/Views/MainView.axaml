@@ -116,11 +116,23 @@
 				</Style>
 			</StackPanel.Styles>
 
-			<Button x:Name="BtnUpdate"
+			<Button x:Name="BtnLaunch"
 					Padding="18"
+					Foreground="White"
+					Background="ForestGreen"
+					HorizontalAlignment="Center"
+					HorizontalContentAlignment="Center"
+					MaxWidth="720"
+					MinWidth="500"
+					FontSize="20"
+					Content="          Launch          "
+					Command="{Binding LaunchCommand}"/>
+			
+			<Button x:Name="BtnUpdate"
 					Foreground="White"
 					Background="DarkOrange"
 					HorizontalContentAlignment="Center"
+					HorizontalAlignment="Center"
 					MaxWidth="500"
 					MinWidth="360"
 					FontSize="18"
@@ -133,16 +145,6 @@
 					</Style>
 				</Button.Styles>
 			</Button>
-			
-			<Button x:Name="BtnLaunch"
-					Foreground="White"
-					Background="ForestGreen"
-					HorizontalContentAlignment="Center"
-					MaxWidth="500"
-					MinWidth="360"
-					FontSize="18"
-					Content="Launch"
-					Command="{Binding LaunchCommand}"/>
 
 			<TextBlock x:Name="VersionTxt"
 					   FontSize="15"

@@ -64,6 +64,10 @@ namespace CykieAppLauncher.ViewModels
                                 view.BtnLaunch.IsEnabled = false;
                                 view.BtnUpdate.IsEnabled = false;
                                 break;
+                            case Launcher.State.Installing:
+                                view.BtnLaunch.IsEnabled = false;
+                                view.BtnUpdate.IsEnabled = false;
+                                break;
                             case Launcher.State.Launching:
                                 view.BtnLaunch.IsEnabled = false;
                                 view.BtnUpdate.IsEnabled = false;
@@ -119,8 +123,8 @@ namespace CykieAppLauncher.ViewModels
 
             Header = CurLauncher.AppName;
 
-            SelfUpdater = new Launcher(Path.Combine(RootPath, "Settings", "Launcher.config"), Path.Combine(RootPath, "self-update.zip"),
-                Path.Combine(RootPath, "self-update"), isSelfUpdater: true);
+            SelfUpdater = new Launcher(Path.Combine(RootPath, "Settings", "Launcher.config"), Path.Combine(RootPath, Launcher.SELF_UPDATE_TEXT + ".zip"),
+                Path.Combine(RootPath, Launcher.SELF_UPDATE_TEXT), isSelfUpdater: true);
 
             UpdateCommand = ReactiveCommand.Create(PressedUpdate);
             LaunchCommand = ReactiveCommand.Create(PressedLaunch);
@@ -139,7 +143,7 @@ namespace CykieAppLauncher.ViewModels
                     SelfUpdater.UpdateSelfAndRestart();
 
                     /*x https://andreasrohner.at/posts/Programming/C%23/A-platform-independent-way-for-a-C%23-program-to-update-itself/#:~:text=A%20platform%20independent%20way%20for%20a%20C%23%20program,...%203%20Demo%20Project%20...%204%20References%20
-                    var updatePath = Path.Combine(RootPath, "self-update");
+                    var updatePath = Path.Combine(RootPath, Launcher.SELF_UPDATE_TXT);
 
                     //Exclude Settings
                     var tmpSettingsPath = Path.Combine(updatePath, new DirectoryInfo(SettingsPath).Name);
@@ -159,7 +163,7 @@ namespace CykieAppLauncher.ViewModels
                     //Windows update
                     if (AppInfo.TargetPlatform == AppInfo.PlatformType.Windows)
                     {
-                        var batFilePath = RootPath + "self-update.bat";
+                        var batFilePath = RootPath + Launcher.SELF_UPDATE_TXT + ".bat";
                         var launcherName = Path.GetFileName(Environment.ProcessPath);
 
                         string content =
@@ -438,7 +442,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                         ProcessDriveDownload(zipDest, out link);
                         attempts++;
                     }
-                    while (!WasDownloadSuccessful(config, isSelfUpdate ? Path.Combine(RootPath, "self-update") : BuildPath) && attempts < 4);
+                    while (!WasDownloadSuccessful(config, isSelfUpdate ? Path.Combine(RootPath, Launcher.SELF_UPDATE_TXT) : BuildPath) && attempts < 4);
 
                     _ = OnDownloadComplete(config);
                 }
@@ -625,9 +629,9 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
             return result == MsgBox.MessageBoxResult.Accept;
         }
 
-        void OnBeginDownload(Task download)
+        void OnBeginDownload()
         {
-            if (!StatusStr.Contains("Downloading Files")) return;
+            /*if (!StatusStr.Contains("Downloading Files")) return;
 
             string dots = StatusStr.Split('.', 2)[1] + ".";
             //StatusStr = "Downloading Files" + dots;
@@ -636,7 +640,7 @@ DEL ""%~f0"" & START """" /B ""{launcherName}""";
                 Thread.Sleep(500);
                 dots = dots == "..." ? "." : (dots == "." ? dots = ".." : "...");
                 StatusStr = "Downloading Files" + dots;
-            }
+            }*/
         }
 
         void OnUpdateComplete()

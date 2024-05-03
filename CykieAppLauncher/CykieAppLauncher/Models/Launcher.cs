@@ -13,7 +13,6 @@ namespace CykieAppLauncher.Models
 
     public class Launcher
     {
-        //! STATIC //
         public string RootPath { get; private set; } = "";
         public string SettingsPath { get; private set; } = "";
 
@@ -162,17 +161,10 @@ namespace CykieAppLauncher.Models
             var info = File.ReadAllLines(filePath);
             if (info.Length < 7)
             {
-                //Default Links
+                //Test Link - Windows
                 string defName = "Blooming Darkness";
                 string vLink = "https://drive.google.com/uc?export=download&id=1yTkCTalsDPKeJ2kpAgIAZMGvv82qZ9dh";
-                string bLink = "https://drive.google.com/uc?export=download&id=1FpTxX1L3-CBd5lTM29Wzm3G_JUpXxNAK";
-
-                if (!AppInfo.IsDesktop)
-                {
-                    defName = "Meeting Time";
-                    vLink = "https://drive.google.com/uc?export=download&id=1LW56nibL44OpIqPrDrwMlG3pY4QvcjgZ";
-                    bLink = "https://drive.google.com/uc?export=download&id=14Y_iXKvY9tfoBdRZFiCj__vrt6pZHUZX";
-                }
+                string bLink = "https://drive.google.com/uc?export=download&id=1MgxwXPEIK3XOtdCWXOpUuMlAsIzZHBZ4";
 
                 info = ($"App Name={defName}\n" +
                     "Version=\n" +
